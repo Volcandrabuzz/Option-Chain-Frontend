@@ -48,7 +48,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const socketRef = useRef<Socket | null>(null);
 
-  const SERVER_URL = 'http://localhost:5000';
+  const SERVER_URL = 'https://670fddce61f4.ngrok-free.app';
 
   useEffect(() => {
     initializeConnection();
@@ -62,7 +62,12 @@ function App() {
   }, []);
 
   const initializeConnection = () => {
-    socketRef.current = io(SERVER_URL);
+    if (!SERVER_URL) return;
+
+    socketRef.current = io(SERVER_URL, {
+    transports: ['websocket', 'polling'], // Ensure fallback works
+    secure: true,
+    });
 
     socketRef.current.on('connect', () => {
       console.log('Connected to WebSocket server');
@@ -116,20 +121,40 @@ function App() {
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${SERVER_URL}/api/data`);
+      const response = await fetch(`${SERVER_URL}/api/data`, {
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true" // 👈 bypass ngrok splash page
+        }
+      });
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const raw = await response.text();  // 👀 log actual HTML if any
+        console.warn("Non-JSON response received from", response.url);
+        console.log("Raw response:", raw);
+        return;
+      }
+
       const result = await response.json();
 
       if (result.success) {
         setData(result.data);
-        setConnectionStatus(prev => ({ ...prev, totalPoints: result.total_points }));
+        setConnectionStatus(prev => ({
+          ...prev,
+          totalPoints: result.total_points
+        }));
         setLastUpdate(new Date().toLocaleTimeString());
       }
     } catch (error) {
-      console.error('Error fetching initial data:', error);
+      console.error("Error fetching initial data:", error);
     } finally {
       setIsLoading(false);
     }
   };
+
+
 
   const requestFullData = () => {
     console.log('Manual refresh requested');
