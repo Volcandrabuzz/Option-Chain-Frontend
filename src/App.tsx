@@ -905,10 +905,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   
   // Strike price states
-  const [top5CEStrikes, setTop5CEStrikes] = useState<number[]>([]);
-  const [top5PEStrikes, setTop5PEStrikes] = useState<number[]>([]);
-  const [currentTopCE, setCurrentTopCE] = useState<number | null>(null);
-  const [currentTopPE, setCurrentTopPE] = useState<number | null>(null);
+  const [top10CEStrikes, setTop10CEStrikes] = useState<number[]>([]);
+  const [top10PEStrikes, setTop10PEStrikes] = useState<number[]>([]);
+  const [currentMaxCE, setCurrentMaxCE] = useState<number | null>(null);
+  const [currentMaxPE, setCurrentMaxPE] = useState<number | null>(null);
   
   // Arrays for strike data
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
@@ -969,16 +969,16 @@ function App() {
       console.log('First fetch complete:', response);
       setConnectionStatus(prev => ({ ...prev, firstFetchComplete: true }));
       
-      // Set top 5 strikes
-      setTop5CEStrikes(response.top_5_ce_strikes || []);
-      setTop5PEStrikes(response.top_5_pe_strikes || []);
-      setCurrentTopCE(response.current_top_ce);
-      setCurrentTopPE(response.current_top_pe);
+      // Set top 10 strikes
+      setTop10CEStrikes(response.top_10_ce_strikes || []);
+      setTop10PEStrikes(response.top_10_pe_strikes || []);
+      setCurrentMaxCE(response.current_max_ce);
+      setCurrentMaxPE(response.current_max_pe);
       
       // Initialize arrays
       setCeArrays(response.ce_oi_arrays || {});
       setPeArrays(response.pe_oi_arrays || {});
-      setUnderlyingArray(response.underlying_diff_array || [0]);
+      setUnderlyingArray(response.underlying_diff_array || []);
       
       setTimeout(() => fetchInitialData(), 1000);
     });
@@ -1001,22 +1001,22 @@ function App() {
         return [...prev, timeStr];
       });
 
-      // Update topmost strikes
-      setCurrentTopCE(response.current_top_ce);
-      setCurrentTopPE(response.current_top_pe);
+      // Update max strikes (strikes with highest rate of change)
+      setCurrentMaxCE(response.current_max_ce);
+      setCurrentMaxPE(response.current_max_pe);
 
-      // Update arrays for topmost strikes
-      if (response.current_top_ce && response.ce_oi_array) {
+      // Update arrays for max strikes
+      if (response.current_max_ce && response.ce_oi_array) {
         setCeArrays(prev => ({
           ...prev,
-          [response.current_top_ce]: response.ce_oi_array
+          [response.current_max_ce]: response.ce_oi_array
         }));
       }
 
-      if (response.current_top_pe && response.pe_oi_array) {
+      if (response.current_max_pe && response.pe_oi_array) {
         setPeArrays(prev => ({
           ...prev,
-          [response.current_top_pe]: response.pe_oi_array
+          [response.current_max_pe]: response.pe_oi_array
         }));
       }
 
@@ -1094,10 +1094,10 @@ function App() {
         }
 
         // Update strike data if available
-        if (response.top_5_ce_strikes) setTop5CEStrikes(response.top_5_ce_strikes);
-        if (response.top_5_pe_strikes) setTop5PEStrikes(response.top_5_pe_strikes);
-        if (response.current_top_ce) setCurrentTopCE(response.current_top_ce);
-        if (response.current_top_pe) setCurrentTopPE(response.current_top_pe);
+        if (response.top_10_ce_strikes) setTop10CEStrikes(response.top_10_ce_strikes);
+        if (response.top_10_pe_strikes) setTop10PEStrikes(response.top_10_pe_strikes);
+        if (response.current_max_ce) setCurrentMaxCE(response.current_max_ce);
+        if (response.current_max_pe) setCurrentMaxPE(response.current_max_pe);
         if (response.ce_oi_arrays) setCeArrays(response.ce_oi_arrays);
         if (response.pe_oi_arrays) setPeArrays(response.pe_oi_arrays);
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
@@ -1146,10 +1146,10 @@ function App() {
         }
 
         // Load strike data
-        if (result.top_5_ce_strikes) setTop5CEStrikes(result.top_5_ce_strikes);
-        if (result.top_5_pe_strikes) setTop5PEStrikes(result.top_5_pe_strikes);
-        if (result.current_top_ce) setCurrentTopCE(result.current_top_ce);
-        if (result.current_top_pe) setCurrentTopPE(result.current_top_pe);
+        if (result.top_10_ce_strikes) setTop10CEStrikes(result.top_10_ce_strikes);
+        if (result.top_10_pe_strikes) setTop10PEStrikes(result.top_10_pe_strikes);
+        if (result.current_max_ce) setCurrentMaxCE(result.current_max_ce);
+        if (result.current_max_pe) setCurrentMaxPE(result.current_max_pe);
         if (result.ce_oi_arrays) setCeArrays(result.ce_oi_arrays);
         if (result.pe_oi_arrays) setPeArrays(result.pe_oi_arrays);
         if (result.underlying_diff_array) setUnderlyingArray(result.underlying_diff_array);
@@ -1220,13 +1220,13 @@ function App() {
     }
   };
 
-  // Check if a strike should be checked (either topmost or user-selected)
+  // Check if a strike should be checked (either max or user-selected)
   const isCEChecked = (strike: number) => {
-    return strike === currentTopCE || userSelectedCE.has(strike);
+    return strike === currentMaxCE || userSelectedCE.has(strike);
   };
 
   const isPEChecked = (strike: number) => {
-    return strike === currentTopPE || userSelectedPE.has(strike);
+    return strike === currentMaxPE || userSelectedPE.has(strike);
   };
 
   // Left chart data (PE/CE changes)
@@ -1278,16 +1278,16 @@ function App() {
       });
     }
 
-    // Add CE strikes that are checked (topmost or user-selected)
-    top5CEStrikes.forEach((strike) => {
+    // Add CE strikes that are checked (max or user-selected)
+    top10CEStrikes.forEach((strike) => {
       if (isCEChecked(strike) && ceArrays[strike]) {
-        const isTop = strike === currentTopCE;
+        const isMax = strike === currentMaxCE;
         datasets.push({
-          label: `CE ${strike}${isTop ? ' ⭐' : ''}`,
+          label: `CE ${strike}${isMax ? ' ⭐' : ''}`,
           data: ceArrays[strike],
           borderColor: STRIKE_COLORS[colorIndex % STRIKE_COLORS.length],
           backgroundColor: `${STRIKE_COLORS[colorIndex % STRIKE_COLORS.length]}20`,
-          borderWidth: isTop ? 3 : 2,
+          borderWidth: isMax ? 3 : 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
@@ -1297,16 +1297,16 @@ function App() {
       }
     });
 
-    // Add PE strikes that are checked (topmost or user-selected)
-    top5PEStrikes.forEach((strike) => {
+    // Add PE strikes that are checked (max or user-selected)
+    top10PEStrikes.forEach((strike) => {
       if (isPEChecked(strike) && peArrays[strike]) {
-        const isTop = strike === currentTopPE;
+        const isMax = strike === currentMaxPE;
         datasets.push({
-          label: `PE ${strike}${isTop ? ' ⭐' : ''}`,
+          label: `PE ${strike}${isMax ? ' ⭐' : ''}`,
           data: peArrays[strike],
           borderColor: STRIKE_COLORS[colorIndex % STRIKE_COLORS.length],
           backgroundColor: `${STRIKE_COLORS[colorIndex % STRIKE_COLORS.length]}20`,
-          borderWidth: isTop ? 3 : 2,
+          borderWidth: isMax ? 3 : 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
@@ -1320,7 +1320,7 @@ function App() {
       labels: timestamps,
       datasets,
     };
-  }, [timestamps, underlyingArray, ceArrays, peArrays, top5CEStrikes, top5PEStrikes, currentTopCE, currentTopPE, userSelectedCE, userSelectedPE]);
+  }, [timestamps, underlyingArray, ceArrays, peArrays, top10CEStrikes, top10PEStrikes, currentMaxCE, currentMaxPE, userSelectedCE, userSelectedPE]);
 
   useEffect(() => {
     if (chartRef.current) {
@@ -1518,17 +1518,17 @@ function App() {
             <div className="mb-4 space-y-3">
               {/* CE Strikes */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-300 mb-2">CE Strikes:</h3>
+                <h3 className="text-sm font-semibold text-gray-300 mb-2">CE Strikes (Above Underlying):</h3>
                 <div className="flex flex-wrap gap-3">
-                  {top5CEStrikes.map((strike) => {
-                    const isTop = strike === currentTopCE;
+                  {top10CEStrikes.map((strike) => {
+                    const isMax = strike === currentMaxCE;
                     const isChecked = isCEChecked(strike);
                     
                     return (
                       <label
                         key={`ce-${strike}`}
                         className={`flex items-center space-x-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all ${
-                          isTop 
+                          isMax 
                             ? 'bg-blue-600 border-blue-500 text-white font-semibold' 
                             : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
                         }`}
@@ -1537,15 +1537,15 @@ function App() {
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => {
-                            // Don't allow unchecking topmost strike
-                            if (isTop) return;
+                            // Don't allow unchecking max strike
+                            if (isMax) return;
                             handleCECheckbox(strike, e.target.checked);
                           }}
-                          disabled={isTop}
+                          disabled={isMax}
                           className="w-4 h-4"
                         />
                         <span className="text-sm">
-                          {strike} {isTop && '⭐'}
+                          {strike} {isMax && '⭐'}
                         </span>
                       </label>
                     );
@@ -1555,17 +1555,17 @@ function App() {
 
               {/* PE Strikes */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-300 mb-2">PE Strikes:</h3>
+                <h3 className="text-sm font-semibold text-gray-300 mb-2">PE Strikes (Below Underlying):</h3>
                 <div className="flex flex-wrap gap-3">
-                  {top5PEStrikes.map((strike) => {
-                    const isTop = strike === currentTopPE;
+                  {top10PEStrikes.map((strike) => {
+                    const isMax = strike === currentMaxPE;
                     const isChecked = isPEChecked(strike);
                     
                     return (
                       <label
                         key={`pe-${strike}`}
                         className={`flex items-center space-x-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all ${
-                          isTop 
+                          isMax 
                             ? 'bg-orange-600 border-orange-500 text-white font-semibold' 
                             : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
                         }`}
@@ -1574,21 +1574,22 @@ function App() {
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => {
-                            // Don't allow unchecking topmost strike
-                            if (isTop) return;
+                            // Don't allow unchecking max strike
+                            if (isMax) return;
                             handlePECheckbox(strike, e.target.checked);
                           }}
-                          disabled={isTop}
+                          disabled={isMax}
                           className="w-4 h-4"
                         />
                         <span className="text-sm">
-                          {strike} {isTop && '⭐'}
+                          {strike} {isMax && '⭐'}
                         </span>
                       </label>
                     );
                   })}
                 </div>
               </div>
+
             </div>
 
             {/* Strike Chart */}
@@ -1621,16 +1622,16 @@ function App() {
           </div>
           
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div className="text-sm text-gray-400">Current Top CE</div>
+            <div className="text-sm text-gray-400">Max Rate CE Strike</div>
             <div className="text-2xl font-bold text-blue-400 mt-1">
-              {currentTopCE || '-'}
+              {currentMaxCE || '-'}
             </div>
           </div>
-          
+
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div className="text-sm text-gray-400">Current Top PE</div>
+            <div className="text-sm text-gray-400">Max Rate PE Strike</div>
             <div className="text-2xl font-bold text-orange-400 mt-1">
-              {currentTopPE || '-'}
+              {currentMaxPE || '-'}
             </div>
           </div>
           
