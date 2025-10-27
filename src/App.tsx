@@ -86,7 +86,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'http://localhost:5000';
+  const SERVER_URL = 'https://22c245e42f21.ngrok-free.app';
 
   useEffect(() => {
     initializeConnection();
