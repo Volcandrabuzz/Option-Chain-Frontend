@@ -86,7 +86,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'http://65.1.3.67';
+  const SERVER_URL = ' https://3622d8d7310e.ngrok-free.app';
 
   useEffect(() => {
     initializeConnection();
@@ -101,28 +101,12 @@ function App() {
 
   const initializeConnection = () => {
     socketRef.current = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 10
+      transports: ["websocket"],
     });
 
     socketRef.current.on('connect', () => {
       console.log('✅ Connected to server');
       setConnectionStatus(prev => ({ ...prev, connected: true }));
-    });
-
-    socketRef.current.on('disconnect', () => {
-      console.log('❌ Disconnected from server');
-      setConnectionStatus(prev => ({ ...prev, connected: false }));
-    });
-
-    socketRef.current.on('connected', (response) => {
-      console.log('Server welcome:', response.message);
-      setConnectionStatus(prev => ({
-        ...prev,
-        totalPoints: response.total_points || 0,
-      }));
     });
 
     socketRef.current.on('first_fetch_complete', (response) => {
@@ -139,8 +123,6 @@ function App() {
       setCeArrays(response.ce_oi_arrays || {});
       setPeArrays(response.pe_oi_arrays || {});
       setUnderlyingArray(response.underlying_diff_array || []);
-      
-      setTimeout(() => fetchInitialData(), 1000);
     });
 
     socketRef.current.on('new_data', (response) => {
@@ -262,6 +244,11 @@ function App() {
         if (response.pe_oi_arrays) setPeArrays(response.pe_oi_arrays);
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
       }
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+      setConnectionStatus(prev => ({ ...prev, connected: false }));
     });
   };
 
