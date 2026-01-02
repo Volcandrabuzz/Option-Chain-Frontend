@@ -86,7 +86,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = ' https://3622d8d7310e.ngrok-free.app';
+  const SERVER_URL = 'https://block-airline-fold-hits.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
@@ -601,7 +601,7 @@ function App() {
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center space-x-4">
             <Activity className="h-8 w-8 text-blue-500" />
             <div>
@@ -637,11 +637,11 @@ function App() {
       </div>
 
       <div className="p-6">
-        <div className="grid grid-cols-2 gap-8 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
           
           {/* Left: PE/CE Change Chart */}
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="h-96 w-full">
+            <div className="h-72 sm:h-80 md:h-96 w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
@@ -666,7 +666,7 @@ function App() {
               {/* CE Strikes */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-300 mb-2">CE Strikes (Above Underlying):</h3>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2 sm:gap-3">
                   {top10CEStrikes.map((strike) => {
                     const isMax = strike === currentMaxCE;
                     const isChecked = isCEChecked(strike);
@@ -703,7 +703,7 @@ function App() {
               {/* PE Strikes */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-300 mb-2">PE Strikes (Below Underlying):</h3>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2 sm:gap-3">
                   {top10PEStrikes.map((strike) => {
                     const isMax = strike === currentMaxPE;
                     const isChecked = isPEChecked(strike);
@@ -760,7 +760,7 @@ function App() {
         </div>
 
         {/* Stats Section */}
-        <div className="mt-6 grid grid-cols-4 gap-4">
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <div className="text-sm text-gray-400">Total Data Points</div>
             <div className="text-2xl font-bold text-white mt-1">
