@@ -12,6 +12,7 @@ import {
   Legend,
   ChartOptions,
 } from 'chart.js';
+import annotationPlugin from 'chartjs-plugin-annotation';
 import { Line } from 'react-chartjs-2';
 import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown } from 'lucide-react';
 
@@ -22,7 +23,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  annotationPlugin
 );
 
 interface DataPoint {
@@ -77,6 +79,8 @@ function App() {
   const [top10PEStrikes, setTop10PEStrikes] = useState<number[]>([]);
   const [currentMaxCE, setCurrentMaxCE] = useState<number | null>(null);
   const [currentMaxPE, setCurrentMaxPE] = useState<number | null>(null);
+  const [currentSecondCE, setCurrentSecondCE] = useState<number | null>(null);
+  const [currentSecondPE, setCurrentSecondPE] = useState<number | null>(null);
   
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
   const [peArrays, setPeArrays] = useState<StrikeData>({});
@@ -115,6 +119,10 @@ function App() {
 
   useEffect(() => {
     if (socketRef.current && connectionStatus.connected) {
+      // Clear user selections when changing index
+      setUserSelectedCE(new Set());
+      setUserSelectedPE(new Set());
+      
       socketRef.current.emit("change_index", {
         index: selectedIndex,
       });
@@ -144,6 +152,8 @@ function App() {
       setTop10PEStrikes(response.top_10_pe_strikes || []);
       setCurrentMaxCE(response.current_max_ce);
       setCurrentMaxPE(response.current_max_pe);
+      setCurrentSecondCE(response.current_second_ce);
+      setCurrentSecondPE(response.current_second_pe);
       
       setCeArrays(response.ce_oi_arrays || {});
       setPeArrays(response.pe_oi_arrays || {});
@@ -170,6 +180,8 @@ function App() {
 
       setCurrentMaxCE(response.current_max_ce);
       setCurrentMaxPE(response.current_max_pe);
+      setCurrentSecondCE(response.current_second_ce);
+      setCurrentSecondPE(response.current_second_pe);
 
       if (response.current_max_ce && response.ce_oi_array) {
         setCeArrays(prev => ({
@@ -279,6 +291,8 @@ function App() {
         if (response.top_10_pe_strikes) setTop10PEStrikes(response.top_10_pe_strikes);
         if (response.current_max_ce) setCurrentMaxCE(response.current_max_ce);
         if (response.current_max_pe) setCurrentMaxPE(response.current_max_pe);
+        if (response.current_second_ce) setCurrentSecondCE(response.current_second_ce);
+        if (response.current_second_pe) setCurrentSecondPE(response.current_second_pe);
         if (response.ce_oi_arrays) setCeArrays(response.ce_oi_arrays);
         if (response.pe_oi_arrays) setPeArrays(response.pe_oi_arrays);
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
@@ -559,32 +573,141 @@ function App() {
     },
   };
 
-  const strikeChartOptions: ChartOptions<'line'> = {
+  const strikeChartOptions: ChartOptions<'line'> = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         position: 'top' as const,
         labels: {
           color: '#E5E7EB',
-          font: { size: 12, weight: 'bold' },
+          font: { size: 12, weight: 'bold' as const },
         },
       },
       title: {
         display: true,
         text: 'Strike OI Changes & Underlying Movement',
         color: '#F9FAFB',
-        font: { size: 18, weight: 'bold' },
+        font: { size: 18, weight: 'bold' as const },
       },
       tooltip: {
-        mode: 'index',
+        mode: 'index' as const,
         intersect: false,
         backgroundColor: 'rgba(17, 24, 39, 0.9)',
         titleColor: '#F9FAFB',
         bodyColor: '#E5E7EB',
         borderColor: '#374151',
         borderWidth: 1,
+        callbacks: {
+          label: function(context: any) {
+            let label = context.dataset.label || '';
+            if (label === 'Underlying Diff') {
+              return `${label}: ${context.parsed.y.toFixed(2)} (Index: ${(indexValue + context.parsed.y).toFixed(2)})`;
+            }
+            return `${label}: ${context.parsed.y.toFixed(2)}`;
+          }
+        }
       },
+      annotation: {
+        annotations: {
+          // R1 - Max CE Resistance (Thick Red Line)
+          ...(currentMaxCE && {
+            r1Line: {
+              type: 'line' as const,
+              yMin: currentMaxCE - indexValue,
+              yMax: currentMaxCE - indexValue,
+              borderColor: '#DC2626',
+              borderWidth: 4,
+              borderDash: [10, 5],
+              label: {
+                display: true,
+                content: `R1: ${currentMaxCE}`,
+                position: 'end' as const,
+                backgroundColor: '#DC2626',
+                color: '#FFFFFF',
+                padding: 6,
+                font: {
+                  size: 13,
+                  weight: 'bold' as const
+                }
+              }
+            }
+          }),
+          // R2 - Second CE Resistance (Thinner Orange Line)
+          ...(currentSecondCE && {
+            r2Line: {
+              type: 'line' as const,
+              yMin: currentSecondCE - indexValue,
+              yMax: currentSecondCE - indexValue,
+              borderColor: '#F97316',
+              borderWidth: 3,
+              borderDash: [8, 4],
+              label: {
+                display: true,
+                content: `R2: ${currentSecondCE}`,
+                position: 'end' as const,
+                backgroundColor: '#F97316',
+                color: '#FFFFFF',
+                padding: 5,
+                font: {
+                  size: 12,
+                  weight: 'bold' as const
+                }
+              }
+            }
+          }),
+          // S1 - Max PE Support (Thick Green Line)
+          ...(currentMaxPE && {
+            s1Line: {
+              type: 'line' as const,
+              yMin: currentMaxPE - indexValue,
+              yMax: currentMaxPE - indexValue,
+              borderColor: '#059669',
+              borderWidth: 4,
+              borderDash: [10, 5],
+              label: {
+                display: true,
+                content: `S1: ${currentMaxPE}`,
+                position: 'start' as const,
+                backgroundColor: '#059669',
+                color: '#FFFFFF',
+                padding: 6,
+                font: {
+                  size: 13,
+                  weight: 'bold' as const
+                }
+              }
+            }
+          }),
+          // S2 - Second PE Support (Thinner Teal Line)
+          ...(currentSecondPE && {
+            s2Line: {
+              type: 'line' as const,
+              yMin: currentSecondPE - indexValue,
+              yMax: currentSecondPE - indexValue,
+              borderColor: '#14B8A6',
+              borderWidth: 3,
+              borderDash: [8, 4],
+              label: {
+                display: true,
+                content: `S2: ${currentSecondPE}`,
+                position: 'start' as const,
+                backgroundColor: '#14B8A6',
+                color: '#FFFFFF',
+                padding: 5,
+                font: {
+                  size: 12,
+                  weight: 'bold' as const
+                }
+              }
+            }
+          })
+        }
+      }
     },
     scales: {
       x: {
@@ -592,15 +715,48 @@ function App() {
         ticks: { color: '#9CA3AF', maxTicksLimit: 10 },
       },
       y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
         grid: { color: '#374151' },
-        ticks: { color: '#9CA3AF' },
+        ticks: { 
+          color: '#9CA3AF',
+        },
+        title: {
+          display: true,
+          text: 'Difference / OI Change',
+          color: '#10B981',
+          font: { size: 14, weight: 'bold' as const }
+        },
+        grace: '5%'
       },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        grid: { 
+          drawOnChartArea: false,
+        },
+        ticks: { 
+          color: '#FBBF24',
+          callback: function(tickValue: string | number) {
+            const value = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
+            return (indexValue + value).toFixed(0);
+          }
+        },
+        title: {
+          display: true,
+          text: `${selectedIndex} Value`,
+          color: '#FBBF24',
+          font: { size: 14, weight: 'bold' as const }
+        }
+      }
     },
     animation: {
       duration: 750,
-      easing: 'easeInOutQuart',
+      easing: 'easeInOutQuart' as const,
     },
-  };
+  }), [indexValue, selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE]);
 
   if (!isAuthenticated) {
     return <PasswordModal onSuccess={() => setIsAuthenticated(true)} />;
