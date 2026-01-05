@@ -100,7 +100,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://block-airline-fold-hits.trycloudflare.com';
+  const SERVER_URL = 'https://considering-frozen-treaty-contributor.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
