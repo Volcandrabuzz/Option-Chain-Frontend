@@ -13,6 +13,7 @@ import {
   ChartOptions,
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
+import zoomPlugin from 'chartjs-plugin-zoom';  // Add this
 import { Line } from 'react-chartjs-2';
 import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown } from 'lucide-react';
 
@@ -24,7 +25,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  annotationPlugin
+  annotationPlugin,
+  zoomPlugin  // Register zoom plugin
 );
 
 interface DataPoint {
@@ -94,6 +96,8 @@ function App() {
   
   const [strikeGreeks, setStrikeGreeks] = useState<{[key: string]: StrikeGreeks}>({});
 
+  const [firstFetchIndexValue, setFirstFetchIndexValue] = useState<number>(0);
+
   const [timestamps, setTimestamps] = useState<string[]>([]);
 
   const [indexLoading, setIndexLoading] = useState<{[key: string]: boolean}>({});
@@ -159,7 +163,10 @@ function App() {
       setPeArrays(response.pe_oi_arrays || {});
       setUnderlyingArray(response.underlying_diff_array || []);
       
-      if (response.index_value) setIndexValue(response.index_value);
+      if (response.index_value) {
+        setIndexValue(response.index_value);
+        setFirstFetchIndexValue(response.index_value);  // Store first fetch value
+      }
     });
 
     socketRef.current.on('new_data', (response) => {
@@ -296,7 +303,10 @@ function App() {
         if (response.ce_oi_arrays) setCeArrays(response.ce_oi_arrays);
         if (response.pe_oi_arrays) setPeArrays(response.pe_oi_arrays);
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
-        if (response.index_value) setIndexValue(response.index_value);
+        if (response.index_value) {
+          setIndexValue(response.index_value);
+          setFirstFetchIndexValue(response.index_value);  // Store first fetch value
+        }
         if (response.greeks) setStrikeGreeks(response.greeks);
       }
     });
@@ -573,190 +583,228 @@ function App() {
     },
   };
 
-  const strikeChartOptions: ChartOptions<'line'> = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index' as const,
-      intersect: false,
-    },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        labels: {
-          color: '#E5E7EB',
-          font: { size: 12, weight: 'bold' as const },
-        },
-      },
-      title: {
-        display: true,
-        text: 'Strike OI Changes & Underlying Movement',
-        color: '#F9FAFB',
-        font: { size: 18, weight: 'bold' as const },
-      },
-      tooltip: {
+
+
+  const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
+    // Fixed range with buffer to allow zoom in/out
+    // Start with medium range so user can zoom both ways
+    const initialMin = -300;
+    const initialMax = 300;
+    
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
         mode: 'index' as const,
         intersect: false,
-        backgroundColor: 'rgba(17, 24, 39, 0.9)',
-        titleColor: '#F9FAFB',
-        bodyColor: '#E5E7EB',
-        borderColor: '#374151',
-        borderWidth: 1,
-        callbacks: {
-          label: function(context: any) {
-            let label = context.dataset.label || '';
-            if (label === 'Underlying Diff') {
-              return `${label}: ${context.parsed.y.toFixed(2)} (Index: ${(indexValue + context.parsed.y).toFixed(2)})`;
-            }
-            return `${label}: ${context.parsed.y.toFixed(2)}`;
-          }
-        }
       },
-      annotation: {
-        annotations: {
-          // R1 - Max CE Resistance (Thick Red Line)
-          ...(currentMaxCE && {
-            r1Line: {
-              type: 'line' as const,
-              yMin: currentMaxCE - indexValue,
-              yMax: currentMaxCE - indexValue,
-              borderColor: '#DC2626',
-              borderWidth: 4,
-              borderDash: [10, 5],
-              label: {
-                display: true,
-                content: `R1: ${currentMaxCE}`,
-                position: 'end' as const,
-                backgroundColor: '#DC2626',
-                color: '#FFFFFF',
-                padding: 6,
-                font: {
-                  size: 13,
-                  weight: 'bold' as const
-                }
-              }
-            }
-          }),
-          // R2 - Second CE Resistance (Thinner Orange Line)
-          ...(currentSecondCE && {
-            r2Line: {
-              type: 'line' as const,
-              yMin: currentSecondCE - indexValue,
-              yMax: currentSecondCE - indexValue,
-              borderColor: '#F97316',
-              borderWidth: 3,
-              borderDash: [8, 4],
-              label: {
-                display: true,
-                content: `R2: ${currentSecondCE}`,
-                position: 'end' as const,
-                backgroundColor: '#F97316',
-                color: '#FFFFFF',
-                padding: 5,
-                font: {
-                  size: 12,
-                  weight: 'bold' as const
-                }
-              }
-            }
-          }),
-          // S1 - Max PE Support (Thick Green Line)
-          ...(currentMaxPE && {
-            s1Line: {
-              type: 'line' as const,
-              yMin: currentMaxPE - indexValue,
-              yMax: currentMaxPE - indexValue,
-              borderColor: '#059669',
-              borderWidth: 4,
-              borderDash: [10, 5],
-              label: {
-                display: true,
-                content: `S1: ${currentMaxPE}`,
-                position: 'start' as const,
-                backgroundColor: '#059669',
-                color: '#FFFFFF',
-                padding: 6,
-                font: {
-                  size: 13,
-                  weight: 'bold' as const
-                }
-              }
-            }
-          }),
-          // S2 - Second PE Support (Thinner Teal Line)
-          ...(currentSecondPE && {
-            s2Line: {
-              type: 'line' as const,
-              yMin: currentSecondPE - indexValue,
-              yMax: currentSecondPE - indexValue,
-              borderColor: '#14B8A6',
-              borderWidth: 3,
-              borderDash: [8, 4],
-              label: {
-                display: true,
-                content: `S2: ${currentSecondPE}`,
-                position: 'start' as const,
-                backgroundColor: '#14B8A6',
-                color: '#FFFFFF',
-                padding: 5,
-                font: {
-                  size: 12,
-                  weight: 'bold' as const
-                }
-              }
-            }
-          })
-        }
-      }
-    },
-    scales: {
-      x: {
-        grid: { color: '#374151' },
-        ticks: { color: '#9CA3AF', maxTicksLimit: 10 },
-      },
-      y: {
-        type: 'linear' as const,
-        display: true,
-        position: 'left' as const,
-        grid: { color: '#374151' },
-        ticks: { 
-          color: '#9CA3AF',
+      plugins: {
+        legend: {
+          position: 'top' as const,
+          labels: {
+            color: '#E5E7EB',
+            font: { size: 12, weight: 'bold' as const },
+          },
         },
         title: {
           display: true,
-          text: 'Difference / OI Change',
-          color: '#10B981',
-          font: { size: 14, weight: 'bold' as const }
+          text: 'Strike OI Changes & Underlying Movement',
+          color: '#F9FAFB',
+          font: { size: 18, weight: 'bold' as const },
         },
-        grace: '5%'
-      },
-      y1: {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        grid: { 
-          drawOnChartArea: false,
-        },
-        ticks: { 
-          color: '#FBBF24',
-          callback: function(tickValue: string | number) {
-            const value = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
-            return (indexValue + value).toFixed(0);
+        tooltip: {
+          mode: 'index' as const,
+          intersect: false,
+          backgroundColor: 'rgba(17, 24, 39, 0.9)',
+          titleColor: '#F9FAFB',
+          bodyColor: '#E5E7EB',
+          borderColor: '#374151',
+          borderWidth: 1,
+          callbacks: {
+            label: function(context: any) {
+              let label = context.dataset.label || '';
+              const value = context.parsed.y;
+              
+              if (label === 'Underlying Diff') {
+                const actualIndex = firstFetchIndexValue + value;
+                return `${label}: ${value.toFixed(2)} (Index: ${actualIndex.toFixed(2)})`;
+              }
+              return `${label}: ${value.toFixed(2)}`;
+            }
           }
         },
-        title: {
-          display: true,
-          text: `${selectedIndex} Value`,
-          color: '#FBBF24',
-          font: { size: 14, weight: 'bold' as const }
+        zoom: {
+          pan: {
+            enabled: true,
+            mode: 'y' as const,  // Only pan vertically
+          },
+          zoom: {
+            wheel: {
+              enabled: true,
+            },
+            pinch: {
+              enabled: true,
+            },
+            mode: 'y' as const,  // Only zoom Y-axis
+          },
+          limits: {
+            y: { 
+              min: -1000,  // Can zoom out to see -1000
+              max: 1000,   // Can zoom out to see +1000
+            },
+          },
+        },
+        annotation: {
+          annotations: {
+            // R2 - Second CE Resistance (Dark Red - Thicker line)
+            ...(currentSecondCE && {
+              r2Line: {
+                type: 'line' as const,
+                yMin: currentSecondCE - firstFetchIndexValue,
+                yMax: currentSecondCE - firstFetchIndexValue,
+                borderColor: '#991B1B',  // Dark red
+                borderWidth: 5,
+                label: {
+                  display: true,
+                  content: `R2: ${currentSecondCE}`,
+                  position: 'end' as const,
+                  backgroundColor: '#991B1B',
+                  color: '#FFFFFF',
+                  padding: 6,
+                  font: {
+                    size: 12,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            // R1 - Max CE Resistance (Light Red - Thicker line)
+            ...(currentMaxCE && {
+              r1Line: {
+                type: 'line' as const,
+                yMin: currentMaxCE - firstFetchIndexValue,
+                yMax: currentMaxCE - firstFetchIndexValue,
+                borderColor: '#EF4444',  // Light red
+                borderWidth: 5,
+                label: {
+                  display: true,
+                  content: `R1: ${currentMaxCE}`,
+                  position: 'end' as const,
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  padding: 6,
+                  font: {
+                    size: 13,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            // S1 - Max PE Support (Light Green - Thicker line)
+            ...(currentMaxPE && {
+              s1Line: {
+                type: 'line' as const,
+                yMin: currentMaxPE - firstFetchIndexValue,
+                yMax: currentMaxPE - firstFetchIndexValue,
+                borderColor: '#10B981',  // Light green
+                borderWidth: 5,
+                label: {
+                  display: true,
+                  content: `S1: ${currentMaxPE}`,
+                  position: 'start' as const,
+                  backgroundColor: '#10B981',
+                  color: '#FFFFFF',
+                  padding: 6,
+                  font: {
+                    size: 13,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            // S2 - Second PE Support (Dark Green - Thicker line)
+            ...(currentSecondPE && {
+              s2Line: {
+                type: 'line' as const,
+                yMin: currentSecondPE - firstFetchIndexValue,
+                yMax: currentSecondPE - firstFetchIndexValue,
+                borderColor: '#047857',  // Dark green
+                borderWidth: 5,
+                label: {
+                  display: true,
+                  content: `S2: ${currentSecondPE}`,
+                  position: 'start' as const,
+                  backgroundColor: '#047857',
+                  color: '#FFFFFF',
+                  padding: 6,
+                  font: {
+                    size: 12,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            })
+          }
         }
-      }
-    },
-    animation: {
-      duration: 750,
-      easing: 'easeInOutQuart' as const,
-    },
-  }), [indexValue, selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE]);
+      },
+      scales: {
+        x: {
+          grid: { color: '#374151' },
+          ticks: { color: '#9CA3AF', maxTicksLimit: 10 },
+        },
+        y: {
+          type: 'linear' as const,
+          display: true,
+          position: 'left' as const,
+          grid: { color: '#374151' },
+          min: initialMin,
+          max: initialMax,
+          ticks: { 
+            color: '#10B981',
+            stepSize: 50,  // Fixed 50-step intervals
+            callback: function(tickValue: string | number) {
+              const value = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
+              return value.toFixed(0);
+            }
+          },
+          title: {
+            display: true,
+            text: 'Difference',
+            color: '#10B981',
+            font: { size: 14, weight: 'bold' as const }
+          }
+        },
+        y1: {
+          type: 'linear' as const,
+          display: true,
+          position: 'right' as const,
+          grid: { 
+            drawOnChartArea: false,
+          },
+          min: initialMin,
+          max: initialMax,
+          ticks: { 
+            color: '#FBBF24',
+            stepSize: 50,  // Fixed 50-step intervals
+            callback: function(tickValue: string | number) {
+              const diffValue = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
+              return (firstFetchIndexValue + diffValue).toFixed(0);
+            }
+          },
+          title: {
+            display: true,
+            text: `${selectedIndex} Value`,
+            color: '#FBBF24',
+            font: { size: 14, weight: 'bold' as const }
+          }
+        }
+      },
+      animation: {
+        duration: 750,
+        easing: 'easeInOutQuart' as const,
+      },
+    };
+  }, [selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, firstFetchIndexValue]);
 
   if (!isAuthenticated) {
     return <PasswordModal onSuccess={() => setIsAuthenticated(true)} />;
@@ -1026,7 +1074,21 @@ function App() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
           
           {/* Strike OI Chart (Now First) */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">Strike Price Analysis</h3>
+                <button
+                  onClick={() => {
+                    if (strikeChartRef.current) {
+                      strikeChartRef.current.resetZoom();
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-md text-sm flex items-center space-x-1"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Reset Zoom</span>
+                </button>
+              </div>
             <div className="h-96 w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
