@@ -54,11 +54,19 @@ interface ConnectionStatus {
 }
 
 const STRIKE_COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-  '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+  '#3B82F6',  // Blue
+  '#8B5CF6',  // Purple
+  '#F59E0B',  // Amber/Gold
+  '#EC4899',  // Pink
+  '#06B6D4',  // Cyan
+  '#6366F1',  // Indigo
+  '#F97316',  // Orange (bright, not red)
+  '#A855F7',  // Violet
+  '#14B8A6',  // Teal
+  '#FBBF24',  // Yellow
 ];
 
-const INDEX_OPTIONS = ['NIFTY', 'NIFTYNXT50', 'FINNIFTY', 'BANKNIFTY', 'MIDCPNIFTY'];
+const INDEX_OPTIONS = ['NIFTY','FINNIFTY', 'BANKNIFTY', 'MIDCPNIFTY'];
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -588,8 +596,8 @@ function App() {
   const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
     // Fixed range with buffer to allow zoom in/out
     // Start with medium range so user can zoom both ways
-    const initialMin = -300;
-    const initialMax = 300;
+    const initialMin = -200;
+    const initialMax = 200;
     
     return {
       responsive: true,
@@ -664,6 +672,7 @@ function App() {
                 yMax: currentSecondCE - firstFetchIndexValue,
                 borderColor: '#991B1B',  // Dark red
                 borderWidth: 5,
+                borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `R2: ${currentSecondCE}`,
@@ -686,6 +695,7 @@ function App() {
                 yMax: currentMaxCE - firstFetchIndexValue,
                 borderColor: '#EF4444',  // Light red
                 borderWidth: 5,
+                borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `R1: ${currentMaxCE}`,
@@ -708,6 +718,7 @@ function App() {
                 yMax: currentMaxPE - firstFetchIndexValue,
                 borderColor: '#10B981',  // Light green
                 borderWidth: 5,
+                borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `S1: ${currentMaxPE}`,
@@ -730,6 +741,7 @@ function App() {
                 yMax: currentSecondPE - firstFetchIndexValue,
                 borderColor: '#047857',  // Dark green
                 borderWidth: 5,
+                borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `S2: ${currentSecondPE}`,
