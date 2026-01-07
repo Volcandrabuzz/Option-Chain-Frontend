@@ -108,7 +108,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://psychology-drew-banners-nine.trycloudflare.com';
+  const SERVER_URL = 'https://prerequisite-intl-efficiently-representing.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
