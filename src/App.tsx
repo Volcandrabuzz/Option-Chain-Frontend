@@ -611,8 +611,8 @@ function App() {
   const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
     // Fixed range with buffer to allow zoom in/out
     // Start with medium range so user can zoom both ways
-    const initialMin = -100;
-    const initialMax = 100;
+    const initialMin = -200;
+    const initialMax = 200;
     
     return {
       responsive: true,
