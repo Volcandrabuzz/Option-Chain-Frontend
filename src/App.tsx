@@ -116,7 +116,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://prerequisite-intl-efficiently-representing.trycloudflare.com';
+  const SERVER_URL = 'https://sql-what-air-bullet.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
