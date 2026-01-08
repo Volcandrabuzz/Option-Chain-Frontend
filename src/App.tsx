@@ -53,18 +53,24 @@ interface ConnectionStatus {
   totalPoints: number;
 }
 
-const STRIKE_COLORS = [
-  '#3B82F6',  // Blue
-  '#8B5CF6',  // Purple
-  '#F59E0B',  // Amber/Gold
-  '#EC4899',  // Pink
-  '#06B6D4',  // Cyan
-  '#6366F1',  // Indigo
-  '#F97316',  // Orange (bright, not red)
-  '#A855F7',  // Violet
-  '#14B8A6',  // Teal
-  '#FBBF24',  // Yellow
+// CE Strike Colors – Bold, cool tones (NO red/green)
+const CE_STRIKE_COLORS = [
+  '#3B82F6', // Electric Blue
+  '#6366F1', // Indigo
+  '#8B5CF6', // Violet
+  '#0EA5E9', // Sky Blue
+  '#06B6D4', // Cyan
 ];
+
+// PE Strike Colors – Warm but NOT red/green
+const PE_STRIKE_COLORS = [
+  '#F59E0B', // Amber
+  '#FBBF24', // Yellow Gold
+  '#EAB308', // Strong Yellow
+  '#FB923C', // Soft Orange
+  '#FDBA74', // Peach
+];
+
 
 const INDEX_OPTIONS = ['NIFTY','FINNIFTY', 'BANKNIFTY', 'MIDCPNIFTY'];
 
@@ -490,7 +496,8 @@ function App() {
 
   const strikeChartData = useMemo(() => {
     const datasets: any[] = [];
-    let colorIndex = 0;
+    let ceColorIndex = 0;
+    let peColorIndex = 0;
 
     if (underlyingArray.length > 0) {
       datasets.push({
@@ -498,47 +505,54 @@ function App() {
         data: underlyingArray,
         borderColor: '#FFFFFF',
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderWidth: 2,
+        borderWidth: 3,
         fill: false,
         tension: 0.1,
         pointRadius: 0,
         pointHoverRadius: 0,
+        yAxisID: 'y',
       });
     }
 
+    // CE Strikes - Use darker colors
     top10CEStrikes.forEach((strike) => {
       if (isCEChecked(strike) && ceArrays[strike]) {
         const isMax = strike === currentMaxCE;
+        const isSecondMax = strike === currentSecondCE;
         datasets.push({
-          label: `CE ${strike}${isMax ? ' ⭐' : ''}`,
+          label: `CE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
           data: ceArrays[strike],
-          borderColor: STRIKE_COLORS[colorIndex % STRIKE_COLORS.length],
-          backgroundColor: `${STRIKE_COLORS[colorIndex % STRIKE_COLORS.length]}20`,
-          borderWidth: isMax ? 3 : 2,
+          borderColor: CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length],
+          backgroundColor: `${CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length]}20`,
+          borderWidth: isMax ? 4 : isSecondMax ? 3 : 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
           pointHoverRadius: 0,
+          yAxisID: 'y',
         });
-        colorIndex++;
+        ceColorIndex++;
       }
     });
 
+    // PE Strikes - Use lighter colors
     top10PEStrikes.forEach((strike) => {
       if (isPEChecked(strike) && peArrays[strike]) {
         const isMax = strike === currentMaxPE;
+        const isSecondMax = strike === currentSecondPE;
         datasets.push({
-          label: `PE ${strike}${isMax ? ' ⭐' : ''}`,
+          label: `PE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
           data: peArrays[strike],
-          borderColor: STRIKE_COLORS[colorIndex % STRIKE_COLORS.length],
-          backgroundColor: `${STRIKE_COLORS[colorIndex % STRIKE_COLORS.length]}20`,
-          borderWidth: isMax ? 3 : 2,
+          borderColor: PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length],
+          backgroundColor: `${PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length]}20`,
+          borderWidth: isMax ? 4 : isSecondMax ? 3 : 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
           pointHoverRadius: 0,
+          yAxisID: 'y',
         });
-        colorIndex++;
+        peColorIndex++;
       }
     });
 
@@ -546,7 +560,8 @@ function App() {
       labels: timestamps,
       datasets,
     };
-  }, [timestamps, underlyingArray, ceArrays, peArrays, top10CEStrikes, top10PEStrikes, currentMaxCE, currentMaxPE, userSelectedCE, userSelectedPE]);
+  }, [timestamps, underlyingArray, ceArrays, peArrays, top10CEStrikes, top10PEStrikes, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, userSelectedCE, userSelectedPE]);
+
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -596,8 +611,8 @@ function App() {
   const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
     // Fixed range with buffer to allow zoom in/out
     // Start with medium range so user can zoom both ways
-    const initialMin = -200;
-    const initialMax = 200;
+    const initialMin = -100;
+    const initialMax = 100;
     
     return {
       responsive: true,
