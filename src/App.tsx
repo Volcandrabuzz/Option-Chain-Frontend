@@ -122,7 +122,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://sql-what-air-bullet.trycloudflare.com';
+  const SERVER_URL = 'https://serves-zip-unsubscribe-caps.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
