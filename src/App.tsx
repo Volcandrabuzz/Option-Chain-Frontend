@@ -116,6 +116,9 @@ function App() {
 
   const [indexLoading, setIndexLoading] = useState<{[key: string]: boolean}>({});
 
+  const [futuresDiffArray, setFuturesDiffArray] = useState<number[]>([]);
+  const [firstFetchFutures, setFirstFetchFutures] = useState<number>(0);
+
   
   
   const socketRef = useRef<Socket | null>(null);
@@ -137,6 +140,9 @@ function App() {
 
   useEffect(() => {
     if (socketRef.current && connectionStatus.connected) {
+      // Show loading immediately
+      setIndexLoading(prev => ({...prev, [selectedIndex]: true}));
+      
       // Clear user selections when changing index
       setUserSelectedCE(new Set());
       setUserSelectedPE(new Set());
@@ -181,6 +187,9 @@ function App() {
         setIndexValue(response.index_value);
         setFirstFetchIndexValue(response.index_value);  // Store first fetch value
       }
+
+      if (response.futures_diff_array) setFuturesDiffArray(response.futures_diff_array);
+      if (response.first_fetch_futures) setFirstFetchFutures(response.first_fetch_futures);
     });
 
     socketRef.current.on('new_data', (response) => {
@@ -238,6 +247,10 @@ function App() {
 
       if (response.index_value) {
         setIndexValue(response.index_value);
+      }
+
+      if (response.futures_diff_array) {
+        setFuturesDiffArray(response.futures_diff_array);
       }
 
       if (response.greeks) {
@@ -317,11 +330,14 @@ function App() {
         if (response.ce_oi_arrays) setCeArrays(response.ce_oi_arrays);
         if (response.pe_oi_arrays) setPeArrays(response.pe_oi_arrays);
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
+        if (response.futures_diff_array) setFuturesDiffArray(response.futures_diff_array);
+        if (response.first_fetch_futures) setFirstFetchFutures(response.first_fetch_futures);
         if (response.index_value) {
           setIndexValue(response.index_value);
           setFirstFetchIndexValue(response.index_value);  // Store first fetch value
         }
         if (response.greeks) setStrikeGreeks(response.greeks);
+        
       }
     });
 
@@ -388,8 +404,13 @@ function App() {
   };
 
   const requestFullData = () => {
-    console.log('🔄 Manual refresh requested');
-    fetchInitialData();
+    console.log(`🔄 Manual refresh requested for ${selectedIndex}`);
+    
+    if (socketRef.current && connectionStatus.connected) {
+      socketRef.current.emit('request_full_data', {
+        index: selectedIndex  // Send current selected index
+      });
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -506,6 +527,22 @@ function App() {
         borderColor: '#FFFFFF',
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 3,
+        fill: false,
+        tension: 0.1,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        yAxisID: 'y',
+      });
+    }
+
+    if (futuresDiffArray.length > 0) {
+      datasets.push({
+        label: 'Futures Diff',
+        data: futuresDiffArray,
+        borderColor: '#FCD34D',  // Gold/Yellow
+        backgroundColor: 'rgba(252, 211, 77, 0.1)',
+        borderWidth: 3,
+        borderDash: [5, 3],  // Slightly dashed to distinguish from underlying
         fill: false,
         tension: 0.1,
         pointRadius: 0,
@@ -651,6 +688,9 @@ function App() {
               if (label === 'Underlying Diff') {
                 const actualIndex = firstFetchIndexValue + value;
                 return `${label}: ${value.toFixed(2)} (Index: ${actualIndex.toFixed(2)})`;
+              } else if (label === 'Futures Diff') {
+                const actualFutures = firstFetchFutures + value;
+                return `${label}: ${value.toFixed(2)} (Price: ${actualFutures.toFixed(2)})`;
               }
               return `${label}: ${value.toFixed(2)}`;
             }
