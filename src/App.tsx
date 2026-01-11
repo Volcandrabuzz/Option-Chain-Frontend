@@ -1,4 +1,12 @@
+import {
+  savePivotLevels,
+  loadPivotLevels,
+  clearOldPivotLevels,
+  clearTodayPivotLevels
+} from "./utils/storage";
+
 import PasswordModal from "./components/PasswordModal";
+import PivotDialog from './components/PivotDialog';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
@@ -86,6 +94,32 @@ function App() {
   });
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // User pivot levels state
+  const [userPivotLevels, setUserPivotLevels] = useState<{
+    r2?: number;
+    r1?: number;
+    pivot?: number;
+    s1?: number;
+    s2?: number;
+  }>({});
+
+  const [showPivotDialog, setShowPivotDialog] = useState(false);
+
+  const [pivotFormValues, setPivotFormValues] = useState<{
+    r2: string;
+    r1: string;
+    pivot: string;
+    s1: string;
+    s2: string;
+  }>({
+    r2: '',
+    r1: '',
+    pivot: '',
+    s1: '',
+    s2: ''
+  });
+
   
   const [selectedIndex, setSelectedIndex] = useState<string>('NIFTY');
   const [showIndexDropdown, setShowIndexDropdown] = useState(false);
@@ -137,6 +171,61 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    clearOldPivotLevels();
+  }, []);
+
+  useEffect(() => {
+    const levels = loadPivotLevels(selectedIndex);
+
+    if (levels) {
+      setUserPivotLevels(levels);
+      setPivotFormValues({
+        r2: levels.r2?.toString() || '',
+        r1: levels.r1?.toString() || '',
+        pivot: levels.pivot?.toString() || '',
+        s1: levels.s1?.toString() || '',
+        s2: levels.s2?.toString() || ''
+      });
+    } else {
+      setUserPivotLevels({});
+      setPivotFormValues({
+        r2: '',
+        r1: '',
+        pivot: '',
+        s1: '',
+        s2: ''
+      });
+    }
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    const checkMarketClose = () => {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+
+      // 3:30 PM IST
+      if (hours === 15 && minutes >= 30) {
+        clearTodayPivotLevels();
+        setUserPivotLevels({});
+        setPivotFormValues({
+          r2: '',
+          r1: '',
+          pivot: '',
+          s1: '',
+          s2: ''
+        });
+      }
+    };
+
+    const interval = setInterval(checkMarketClose, 60000);
+    checkMarketClose();
+
+    return () => clearInterval(interval);
+  }, []);
+
 
   useEffect(() => {
     if (socketRef.current && connectionStatus.connected) {
@@ -487,6 +576,34 @@ function App() {
     return selected;
   };
 
+  // Pivot dialog handlers
+  const handlePivotChange = (field: string, value: string) => {
+    setPivotFormValues(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSavePivotLevels = () => {
+    const levels: any = {};
+    
+    if (pivotFormValues.r2) levels.r2 = parseFloat(pivotFormValues.r2);
+    if (pivotFormValues.r1) levels.r1 = parseFloat(pivotFormValues.r1);
+    if (pivotFormValues.pivot) levels.pivot = parseFloat(pivotFormValues.pivot);
+    if (pivotFormValues.s1) levels.s1 = parseFloat(pivotFormValues.s1);
+    if (pivotFormValues.s2) levels.s2 = parseFloat(pivotFormValues.s2);
+    
+    // Save to localStorage
+    savePivotLevels(selectedIndex, levels);
+    
+    // Update state to redraw chart
+    setUserPivotLevels(levels);
+    
+    // Close dialog
+    setShowPivotDialog(false);
+  };
+
+
   const chartData = useMemo(() => ({
     labels: data.map(item => formatTimestamp(item.timestamp)),
     datasets: [
@@ -648,8 +765,8 @@ function App() {
   const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
     // Fixed range with buffer to allow zoom in/out
     // Start with medium range so user can zoom both ways
-    const initialMin = -200;
-    const initialMax = 200;
+    const initialMin = -100;
+    const initialMax = 100;
     
     return {
       responsive: true,
@@ -806,6 +923,121 @@ function App() {
                   padding: 6,
                   font: {
                     size: 12,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+
+            // User R2 (solid line)
+            ...(userPivotLevels.r2 && {
+              userR2Line: {
+                type: 'line' as const,
+                yMin: userPivotLevels.r2 - firstFetchIndexValue,
+                yMax: userPivotLevels.r2 - firstFetchIndexValue,
+                borderColor: '#DC2626',  // Solid red
+                borderWidth: 3,
+                label: {
+                  display: true,
+                  content: `User R2: ${userPivotLevels.r2}`,
+                  position: 'end' as const,
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  padding: 4,
+                  font: {
+                    size: 11,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            
+            // User R1 (solid line)
+            ...(userPivotLevels.r1 && {
+              userR1Line: {
+                type: 'line' as const,
+                yMin: userPivotLevels.r1 - firstFetchIndexValue,
+                yMax: userPivotLevels.r1 - firstFetchIndexValue,
+                borderColor: '#EF4444',  // Solid light red
+                borderWidth: 3,
+                label: {
+                  display: true,
+                  content: `User R1: ${userPivotLevels.r1}`,
+                  position: 'end' as const,
+                  backgroundColor: '#EF4444',
+                  color: '#FFFFFF',
+                  padding: 4,
+                  font: {
+                    size: 11,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            
+            // User Pivot (solid line)
+            ...(userPivotLevels.pivot && {
+              userPivotLine: {
+                type: 'line' as const,
+                yMin: userPivotLevels.pivot - firstFetchIndexValue,
+                yMax: userPivotLevels.pivot - firstFetchIndexValue,
+                borderColor: '#FBBF24',  // Solid yellow
+                borderWidth: 3,
+                label: {
+                  display: true,
+                  content: `Pivot: ${userPivotLevels.pivot}`,
+                  position: 'center' as const,
+                  backgroundColor: '#FBBF24',
+                  color: '#000000',
+                  padding: 4,
+                  font: {
+                    size: 11,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            
+            // User S1 (solid line)
+            ...(userPivotLevels.s1 && {
+              userS1Line: {
+                type: 'line' as const,
+                yMin: userPivotLevels.s1 - firstFetchIndexValue,
+                yMax: userPivotLevels.s1 - firstFetchIndexValue,
+                borderColor: '#10B981',  // Solid light green
+                borderWidth: 3,
+                label: {
+                  display: true,
+                  content: `User S1: ${userPivotLevels.s1}`,
+                  position: 'start' as const,
+                  backgroundColor: '#10B981',
+                  color: '#FFFFFF',
+                  padding: 4,
+                  font: {
+                    size: 11,
+                    weight: 'bold' as const
+                  }
+                }
+              }
+            }),
+            
+            // User S2 (solid line)
+            ...(userPivotLevels.s2 && {
+              userS2Line: {
+                type: 'line' as const,
+                yMin: userPivotLevels.s2 - firstFetchIndexValue,
+                yMax: userPivotLevels.s2 - firstFetchIndexValue,
+                borderColor: '#047857',  // Solid dark green
+                borderWidth: 3,
+                label: {
+                  display: true,
+                  content: `User S2: ${userPivotLevels.s2}`,
+                  position: 'start' as const,
+                  backgroundColor: '#047857',
+                  color: '#FFFFFF',
+                  padding: 4,
+                  font: {
+                    size: 11,
                     weight: 'bold' as const
                   }
                 }
@@ -1143,7 +1375,12 @@ function App() {
           {/* Strike OI Chart (Now First) */}
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">Strike Price Analysis</h3>
+                <button
+                  onClick={() => setShowPivotDialog(true)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-semibold flex items-center space-x-2"
+                >
+                  <span>⚙️ Set Pivot Levels</span>
+                </button>     
                 <button
                   onClick={() => {
                     if (strikeChartRef.current) {
@@ -1211,6 +1448,15 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Pivot Dialog */}
+      <PivotDialog
+        isOpen={showPivotDialog}
+        onClose={() => setShowPivotDialog(false)}
+        values={pivotFormValues}
+        onChange={handlePivotChange}
+        onSave={handleSavePivotLevels}
+      />
 
       <style>{`
         @keyframes marquee {
