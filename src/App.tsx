@@ -127,6 +127,7 @@ function App() {
   
   const [top10CEStrikes, setTop10CEStrikes] = useState<number[]>([]);
   const [top10PEStrikes, setTop10PEStrikes] = useState<number[]>([]);
+
   const [currentMaxCE, setCurrentMaxCE] = useState<number | null>(null);
   const [currentMaxPE, setCurrentMaxPE] = useState<number | null>(null);
   const [currentSecondCE, setCurrentSecondCE] = useState<number | null>(null);
@@ -134,7 +135,6 @@ function App() {
   
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
   const [peArrays, setPeArrays] = useState<StrikeData>({});
-  const [underlyingArray, setUnderlyingArray] = useState<number[]>([]);
   
   const [userSelectedCE, setUserSelectedCE] = useState<Set<number>>(new Set());
   const [userSelectedPE, setUserSelectedPE] = useState<Set<number>>(new Set());
@@ -145,6 +145,7 @@ function App() {
   const [strikeGreeks, setStrikeGreeks] = useState<{[key: string]: StrikeGreeks}>({});
 
   const [firstFetchIndexValue, setFirstFetchIndexValue] = useState<number>(0);
+  const [underlyingArray, setUnderlyingArray] = useState<number[]>([]);
 
   const [timestamps, setTimestamps] = useState<string[]>([]);
 
@@ -421,9 +422,11 @@ function App() {
         if (response.underlying_diff_array) setUnderlyingArray(response.underlying_diff_array);
         if (response.futures_diff_array) setFuturesDiffArray(response.futures_diff_array);
         if (response.first_fetch_futures) setFirstFetchFutures(response.first_fetch_futures);
-        if (response.index_value) {
+        if (response.first_fetch_underlying) {
+          setFirstFetchIndexValue(response.first_fetch_underlying);  // Store first fetch value
+        }
+        if(response.index_value) {
           setIndexValue(response.index_value);
-          setFirstFetchIndexValue(response.index_value);  // Store first fetch value
         }
         if (response.greeks) setStrikeGreeks(response.greeks);
         
@@ -482,7 +485,17 @@ function App() {
         if (result.ce_oi_arrays) setCeArrays(result.ce_oi_arrays);
         if (result.pe_oi_arrays) setPeArrays(result.pe_oi_arrays);
         if (result.underlying_diff_array) setUnderlyingArray(result.underlying_diff_array);
-        if (result.index_value) setIndexValue(result.index_value);
+        if (result.first_fetch_underlying) {
+          setFirstFetchIndexValue(result.first_fetch_underlying);
+          setIndexValue(result.first_fetch_underlying);
+        }
+        if (result.first_fetch_futures) {
+          setFirstFetchFutures(result.first_fetch_futures);
+        }
+
+        if (result.futures_diff_array) {
+          setFuturesDiffArray(result.futures_diff_array);
+        }
         if (result.greeks) setStrikeGreeks(result.greeks);
       }
     } catch (error) {
@@ -678,7 +691,7 @@ function App() {
           data: ceArrays[strike],
           borderColor: CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length],
           backgroundColor: `${CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length]}20`,
-          borderWidth: isMax ? 4 : isSecondMax ? 3 : 2,
+          borderWidth: 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
@@ -699,7 +712,7 @@ function App() {
           data: peArrays[strike],
           borderColor: PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length],
           backgroundColor: `${PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length]}20`,
-          borderWidth: isMax ? 4 : isSecondMax ? 3 : 2,
+          borderWidth: 2,
           fill: false,
           tension: 0.1,
           pointRadius: 0,
