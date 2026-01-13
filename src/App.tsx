@@ -160,7 +160,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://angeles-amy-communications-abs.trycloudflare.com';
+  const SERVER_URL = 'https://webster-affiliate-issued-broader.trycloudflare.com';
 
   useEffect(() => {
     initializeConnection();
