@@ -229,10 +229,7 @@ function App() {
 
 
   useEffect(() => {
-    if (socketRef.current && connectionStatus.connected) {
-      // Show loading immediately
-      setIndexLoading(prev => ({...prev, [selectedIndex]: true}));
-      
+    if (socketRef.current && connectionStatus.connected) {      
       // Clear user selections when changing index
       setUserSelectedCE(new Set());
       setUserSelectedPE(new Set());
