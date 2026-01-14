@@ -70,13 +70,13 @@ const CE_STRIKE_COLORS = [
   '#06B6D4', // Cyan
 ];
 
-// PE Strike Colors – Warm but NOT red/green
+// PE Strike Colors – Rich orange palette
 const PE_STRIKE_COLORS = [
-  '#F59E0B', // Amber
-  '#FBBF24', // Yellow Gold
-  '#EAB308', // Strong Yellow
+  '#FF6B35', // Vibrant Orange
+  '#F97316', // Bright Orange
   '#FB923C', // Soft Orange
-  '#FDBA74', // Peach
+  '#EA580C', // Deep Orange
+  '#FF8C42', // Tangerine
 ];
 
 
@@ -650,7 +650,7 @@ function App() {
     if (underlyingArray.length > 0) {
       datasets.push({
         label: 'Underlying Diff',
-        data: underlyingArray,
+        data: underlyingArray.map(val => val / 5),
         borderColor: '#FFFFFF',
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 3,
@@ -659,13 +659,15 @@ function App() {
         pointRadius: 0,
         pointHoverRadius: 0,
         yAxisID: 'y',
+        originalData: underlyingArray, // Store original for tooltip
+
       });
     }
 
     if (futuresDiffArray.length > 0) {
       datasets.push({
         label: 'Futures Diff',
-        data: futuresDiffArray,
+        data: futuresDiffArray.map(val => val / 5),
         borderColor: '#FCD34D',  // Gold/Yellow
         backgroundColor: 'rgba(252, 211, 77, 0.1)',
         borderWidth: 3,
@@ -675,6 +677,7 @@ function App() {
         pointRadius: 0,
         pointHoverRadius: 0,
         yAxisID: 'y',
+        originalData: futuresDiffArray, // Store original for tooltip
       });
     }
 
@@ -775,8 +778,8 @@ function App() {
   const strikeChartOptions: ChartOptions<'line'> = useMemo(() => {
     // Fixed range with buffer to allow zoom in/out
     // Start with medium range so user can zoom both ways
-    const initialMin = -100;
-    const initialMax = 100;
+    const initialMin = -80;
+    const initialMax = 80;
     
     return {
       responsive: true,
@@ -813,11 +816,15 @@ function App() {
               const value = context.parsed.y;
               
               if (label === 'Underlying Diff') {
-                const actualIndex = firstFetchIndexValue + value;
-                return `${label}: ${value.toFixed(2)} (Index: ${actualIndex.toFixed(2)})`;
+                // Get original uncompressed value
+                const originalValue = context.dataset.originalData[context.dataIndex];
+                const actualIndex = firstFetchIndexValue + originalValue;
+                return `${label}: ${originalValue.toFixed(2)} (Index: ${actualIndex.toFixed(2)})`;
               } else if (label === 'Futures Diff') {
-                const actualFutures = firstFetchFutures + value;
-                return `${label}: ${value.toFixed(2)} (Price: ${actualFutures.toFixed(2)})`;
+                // Get original uncompressed value
+                const originalValue = context.dataset.originalData[context.dataIndex];
+                const actualFutures = firstFetchFutures + originalValue;
+                return `${label}: ${originalValue.toFixed(2)} (Price: ${actualFutures.toFixed(2)})`;
               }
               return `${label}: ${value.toFixed(2)}`;
             }
@@ -839,8 +846,8 @@ function App() {
           },
           limits: {
             y: { 
-              min: -1000,  // Can zoom out to see -1000
-              max: 1000,   // Can zoom out to see +1000
+              min: -400,  // Can zoom out to see -1000
+              max: 400,   // Can zoom out to see +1000
             },
           },
         },
@@ -850,20 +857,20 @@ function App() {
             ...(currentSecondCE && {
               r2Line: {
                 type: 'line' as const,
-                yMin: currentSecondCE - firstFetchIndexValue,
-                yMax: currentSecondCE - firstFetchIndexValue,
+                yMin: (currentSecondCE - firstFetchIndexValue)/5,
+                yMax: (currentSecondCE - firstFetchIndexValue)/5,
                 borderColor: '#991B1B',  // Dark red
                 borderWidth: 5,
                 borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `R2: ${currentSecondCE}`,
-                  position: 'end' as const,
+                  position: 'start' as const,
                   backgroundColor: '#991B1B',
                   color: '#FFFFFF',
-                  padding: 6,
+                  padding: 5,
                   font: {
-                    size: 12,
+                    size: 10,
                     weight: 'bold' as const
                   }
                 }
@@ -873,20 +880,20 @@ function App() {
             ...(currentMaxCE && {
               r1Line: {
                 type: 'line' as const,
-                yMin: currentMaxCE - firstFetchIndexValue,
-                yMax: currentMaxCE - firstFetchIndexValue,
+                yMin: (currentMaxCE - firstFetchIndexValue)/5,
+                yMax: (currentMaxCE - firstFetchIndexValue)/5,
                 borderColor: '#EF4444',  // Light red
                 borderWidth: 5,
                 borderDash: [10, 5],  // Dotted pattern
                 label: {
                   display: true,
                   content: `R1: ${currentMaxCE}`,
-                  position: 'end' as const,
+                  position: 'start' as const,
                   backgroundColor: '#EF4444',
                   color: '#FFFFFF',
-                  padding: 6,
+                  padding: 5,
                   font: {
-                    size: 13,
+                    size: 10,
                     weight: 'bold' as const
                   }
                 }
@@ -896,8 +903,8 @@ function App() {
             ...(currentMaxPE && {
               s1Line: {
                 type: 'line' as const,
-                yMin: currentMaxPE - firstFetchIndexValue,
-                yMax: currentMaxPE - firstFetchIndexValue,
+                yMin: (currentMaxPE - firstFetchIndexValue)/5,
+                yMax: (currentMaxPE - firstFetchIndexValue)/5,
                 borderColor: '#10B981',  // Light green
                 borderWidth: 5,
                 borderDash: [10, 5],  // Dotted pattern
@@ -907,9 +914,9 @@ function App() {
                   position: 'start' as const,
                   backgroundColor: '#10B981',
                   color: '#FFFFFF',
-                  padding: 6,
+                  padding: 5,
                   font: {
-                    size: 13,
+                    size: 10,
                     weight: 'bold' as const
                   }
                 }
@@ -919,8 +926,8 @@ function App() {
             ...(currentSecondPE && {
               s2Line: {
                 type: 'line' as const,
-                yMin: currentSecondPE - firstFetchIndexValue,
-                yMax: currentSecondPE - firstFetchIndexValue,
+                yMin: (currentSecondPE - firstFetchIndexValue)/5,
+                yMax: (currentSecondPE - firstFetchIndexValue)/5,
                 borderColor: '#047857',  // Dark green
                 borderWidth: 5,
                 borderDash: [10, 5],  // Dotted pattern
@@ -930,9 +937,9 @@ function App() {
                   position: 'start' as const,
                   backgroundColor: '#047857',
                   color: '#FFFFFF',
-                  padding: 6,
+                  padding: 5,
                   font: {
-                    size: 12,
+                    size: 10,
                     weight: 'bold' as const
                   }
                 }
@@ -943,19 +950,19 @@ function App() {
             ...(userPivotLevels.r2 && {
               userR2Line: {
                 type: 'line' as const,
-                yMin: userPivotLevels.r2 - firstFetchIndexValue,
-                yMax: userPivotLevels.r2 - firstFetchIndexValue,
+                yMin: (userPivotLevels.r2 - firstFetchIndexValue)/5,
+                yMax: (userPivotLevels.r2 - firstFetchIndexValue)/5,
                 borderColor: '#DC2626',  // Solid red
                 borderWidth: 3,
                 label: {
                   display: true,
                   content: `User R2: ${userPivotLevels.r2}`,
-                  position: 'end' as const,
+                  position: 'start' as const,
                   backgroundColor: '#DC2626',
                   color: '#FFFFFF',
                   padding: 4,
                   font: {
-                    size: 11,
+                    size: 8,
                     weight: 'bold' as const
                   }
                 }
@@ -966,19 +973,19 @@ function App() {
             ...(userPivotLevels.r1 && {
               userR1Line: {
                 type: 'line' as const,
-                yMin: userPivotLevels.r1 - firstFetchIndexValue,
-                yMax: userPivotLevels.r1 - firstFetchIndexValue,
+                yMin: (userPivotLevels.r1 - firstFetchIndexValue)/5,
+                yMax: (userPivotLevels.r1 - firstFetchIndexValue)/5,
                 borderColor: '#EF4444',  // Solid light red
                 borderWidth: 3,
                 label: {
                   display: true,
                   content: `User R1: ${userPivotLevels.r1}`,
-                  position: 'end' as const,
+                  position: 'start' as const,
                   backgroundColor: '#EF4444',
                   color: '#FFFFFF',
                   padding: 4,
                   font: {
-                    size: 11,
+                    size: 8,
                     weight: 'bold' as const
                   }
                 }
@@ -989,8 +996,8 @@ function App() {
             ...(userPivotLevels.pivot && {
               userPivotLine: {
                 type: 'line' as const,
-                yMin: userPivotLevels.pivot - firstFetchIndexValue,
-                yMax: userPivotLevels.pivot - firstFetchIndexValue,
+                yMin: (userPivotLevels.pivot - firstFetchIndexValue)/5,
+                yMax: (userPivotLevels.pivot - firstFetchIndexValue)/5,
                 borderColor: '#FBBF24',  // Solid yellow
                 borderWidth: 3,
                 label: {
@@ -1001,7 +1008,7 @@ function App() {
                   color: '#000000',
                   padding: 4,
                   font: {
-                    size: 11,
+                    size: 8,
                     weight: 'bold' as const
                   }
                 }
@@ -1012,8 +1019,8 @@ function App() {
             ...(userPivotLevels.s1 && {
               userS1Line: {
                 type: 'line' as const,
-                yMin: userPivotLevels.s1 - firstFetchIndexValue,
-                yMax: userPivotLevels.s1 - firstFetchIndexValue,
+                yMin: (userPivotLevels.s1 - firstFetchIndexValue)/5,
+                yMax: (userPivotLevels.s1 - firstFetchIndexValue)/5,
                 borderColor: '#10B981',  // Solid light green
                 borderWidth: 3,
                 label: {
@@ -1024,7 +1031,7 @@ function App() {
                   color: '#FFFFFF',
                   padding: 4,
                   font: {
-                    size: 11,
+                    size: 8,
                     weight: 'bold' as const
                   }
                 }
@@ -1035,8 +1042,8 @@ function App() {
             ...(userPivotLevels.s2 && {
               userS2Line: {
                 type: 'line' as const,
-                yMin: userPivotLevels.s2 - firstFetchIndexValue,
-                yMax: userPivotLevels.s2 - firstFetchIndexValue,
+                yMin: (userPivotLevels.s2 - firstFetchIndexValue)/5,
+                yMax: (userPivotLevels.s2 - firstFetchIndexValue)/5,
                 borderColor: '#047857',  // Solid dark green
                 borderWidth: 3,
                 label: {
@@ -1047,7 +1054,7 @@ function App() {
                   color: '#FFFFFF',
                   padding: 4,
                   font: {
-                    size: 11,
+                    size: 8,
                     weight: 'bold' as const
                   }
                 }
@@ -1070,7 +1077,7 @@ function App() {
           max: initialMax,
           ticks: { 
             color: '#10B981',
-            stepSize: 50,  // Fixed 50-step intervals
+            stepSize: 20,  // Fixed 20-step intervals
             callback: function(tickValue: string | number) {
               const value = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
               return value.toFixed(0);
@@ -1094,10 +1101,11 @@ function App() {
           max: initialMax,
           ticks: { 
             color: '#FBBF24',
-            stepSize: 50,  // Fixed 50-step intervals
+            stepSize: 20,  // 20 on compressed scale = 100 actual points (20 × 5 = 100)
             callback: function(tickValue: string | number) {
-              const diffValue = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
-              return (firstFetchIndexValue + diffValue).toFixed(0);
+              const compressedDiff = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
+              const actualDiff = compressedDiff * 5; // Decompress: multiply by 5
+              return (firstFetchIndexValue + actualDiff).toFixed(0);
             }
           },
           title: {
@@ -1403,7 +1411,7 @@ function App() {
                   <span>Reset Zoom</span>
                 </button>
               </div>
-            <div className="h-96 w-full">
+            <div className="h-[512px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
@@ -1431,7 +1439,7 @@ function App() {
 
           {/* PE/CE Change Chart (Now Second) */}
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="h-96 w-full">
+            <div className="h-[512px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
