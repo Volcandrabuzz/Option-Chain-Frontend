@@ -823,7 +823,7 @@ function App() {
               } else if (label === 'Futures Diff') {
                 // Get original uncompressed value
                 const originalValue = context.dataset.originalData[context.dataIndex];
-                const actualFutures = firstFetchFutures + originalValue;
+                const actualFutures = firstFetchIndexValue + originalValue;
                 return `${label}: ${originalValue.toFixed(2)} (Price: ${actualFutures.toFixed(2)})`;
               }
               return `${label}: ${value.toFixed(2)}`;
