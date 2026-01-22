@@ -160,7 +160,7 @@ function App() {
   const chartRef = useRef<any>(null);
   const strikeChartRef = useRef<any>(null);
 
-  const SERVER_URL = 'https://linear-after-widely-lounge.trycloudflare.com';
+  const SERVER_URL = 'http://localhost:5000'; // Replace with your server URL
 
   useEffect(() => {
     initializeConnection();
