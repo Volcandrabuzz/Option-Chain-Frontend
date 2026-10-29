@@ -1,6 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
+
+// Self-contained JWT payload decoder (avoids external build/bundler resolution failures)
+function jwtDecode<T = any>(token: string): T {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) throw new Error('Invalid JWT token');
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (err) {
+    throw new Error('Failed to decode JWT: ' + err);
+  }
+}
 
 const SERVER_URL = typeof window !== 'undefined' && window.location.origin.includes('localhost')
   ? 'http://localhost:5000'
