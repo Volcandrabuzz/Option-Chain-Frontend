@@ -1,3 +1,34 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes resistance-blink {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 1);
+    box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.4), 0 0 12px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.25);
+    box-shadow: inset 0 0 2px rgba(239, 68, 68, 0.05), 0 0 2px rgba(239, 68, 68, 0.05);
+  }
+}
+
+@keyframes support-blink {
+  0%, 100% {
+    border-color: rgba(34, 197, 94, 1);
+    box-shadow: inset 0 0 10px rgba(34, 197, 94, 0.4), 0 0 12px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    border-color: rgba(34, 197, 94, 0.25);
+    box-shadow: inset 0 0 2px rgba(34, 197, 94, 0.05), 0 0 2px rgba(34, 197, 94, 0.05);
+  }
+}
+
+.blink-resistance {
+  animation: resistance-blink 1.2s ease-in-out infinite;
+}
+
+.blink-support {
+  animation: support-blink 1.2s ease-in-out infinite;
+}
+
