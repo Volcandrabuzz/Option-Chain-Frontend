@@ -9,10 +9,13 @@ import PivotDialog from './components/PivotDialog';
 import TotalsBipolarMonitor, { TotalsMonitorData } from './components/TotalsBipolarMonitor';
 import OptionStrikeSignalTable, { StrikeRowSignal } from './components/OptionStrikeSignalTable';
 import OIStrikeMonitor, { OIStrikeMonitorPayload } from './components/OIStrikeMonitor';
+import StrikeVwapModal, { StrikeVwapPayload, SelectedStrike } from './components/StrikeVwapModal';
+import NiftyExpectedRangeCard, { ExpectedRangeData } from './components/NiftyExpectedRangeCard';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import TradeJournal from './pages/TradeJournal';
+import { AnalyticsPage } from './pages/Analytics/AnalyticsPage';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -31,7 +34,8 @@ import {
 import annotationPlugin from 'chartjs-plugin-annotation';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line } from 'react-chartjs-2';
-import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown, LogOut, BookOpen } from 'lucide-react';
+import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown, LogOut, BookOpen, Volume2, VolumeX, Bell, BarChart2 } from 'lucide-react';
+import { playCrossoverBeep, testBeepSound } from './utils/audioAlert';
 
 ChartJS.register(
   CategoryScale,
@@ -117,6 +121,16 @@ function NavBar() {
                 }`}
             >
               Dashboard
+            </Link>
+            <Link
+              to="/analytics"
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${isActive('/analytics')
+                  ? 'bg-cyan-500/20 text-cyan-400 font-bold'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                }`}
+            >
+              <BarChart2 className="h-4 w-4" />
+              <span>F&O Analytics</span>
             </Link>
             <Link
               to="/trades"
@@ -227,7 +241,37 @@ function Dashboard() {
   const [strikeChain, setStrikeChain] = useState<StrikeRowSignal[]>([]);
   const [oiStrikeMonitor, setOiStrikeMonitor] = useState<OIStrikeMonitorPayload | null>(null);
 
+  // VWAP modal state
+  const [strikeVwapData, setStrikeVwapData] = useState<StrikeVwapPayload>({});
+  const [vwapModalSelected, setVwapModalSelected] = useState<SelectedStrike | null>(null);
 
+  // Live India VIX and NIFTY Expected Range state
+  const [expectedRange, setExpectedRange] = useState<ExpectedRangeData | null>(null);
+  const [indiaVix, setIndiaVix] = useState<number | null>(null);
+
+  // Crossover Sound & Alert State
+  const [isSoundAlertEnabled, setIsSoundAlertEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('crossover_sound_alert');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const isSoundAlertEnabledRef = useRef(isSoundAlertEnabled);
+  useEffect(() => {
+    isSoundAlertEnabledRef.current = isSoundAlertEnabled;
+  }, [isSoundAlertEnabled]);
+
+  const [crossoverAlert, setCrossoverAlert] = useState<{
+    direction: 'PE_CROSSED_ABOVE' | 'CE_CROSSED_ABOVE';
+    time: string;
+    pe: number;
+    ce: number;
+  } | null>(null);
+
+  const lastPointRef = useRef<{ pe: number; ce: number; timestamp: string } | null>(null);
+  const lastAlertTimestampRef = useRef<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const chartRef = useRef<any>(null);
@@ -300,13 +344,26 @@ function Dashboard() {
 
 
   useEffect(() => {
+    // Reset crossover baseline on index change
+    lastPointRef.current = null;
+    setCrossoverAlert(null);
+
     if (socketRef.current && connectionStatus.connected) {
-      // Clear user selections when changing index
+      // Clear user selections and chart data when changing index
       setUserSelectedCE(new Set());
       setUserSelectedPE(new Set());
+      setData([]);
+      setTimestamps([]);
+      setUnderlyingArray([]);
+      setFuturesDiffArray([]);
+      setFirstFetchIndexValue(0);
+      setFirstFetchFutures(0);
       setTotalsData(null);
       setStrikeChain([]);
       setOiStrikeMonitor(null);
+      setStrikeVwapData({});
+      setVwapModalSelected(null);
+      setExpectedRange(null);
 
       socketRef.current.emit("change_index", {
         index: selectedIndex,
@@ -317,8 +374,12 @@ function Dashboard() {
   const initializeConnection = () => {
     const token = getAccessToken();
 
+    const isLocal = typeof window !== 'undefined' && window.location.origin.includes('localhost');
     socketRef.current = io(SERVER_URL, {
-      transports: ["polling", "websocket"],
+      // Use websocket-only when going through a tunnel/proxy (Cloudflare, ngrok, etc.)
+      // Polling transport does not work reliably through these proxies.
+      // On localhost we allow polling fallback for dev convenience.
+      transports: isLocal ? ["polling", "websocket"] : ["websocket"],
       auth: {
         token: token,
       },
@@ -331,10 +392,18 @@ function Dashboard() {
       console.log('✅ Connected to server');
       setConnectionStatus(prev => ({ ...prev, connected: true }));
 
-      // Send selected index to backend on connect
+      // Send selected index to backend on connect — triggers full_data response
       socketRef.current?.emit("change_index", {
         index: selectedIndex,
       });
+
+      // Belt-and-suspenders: also explicitly request full data 500ms later
+      // in case change_index response races with connection setup
+      setTimeout(() => {
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('request_full_data', { index: selectedIndex });
+        }
+      }, 500);
     });
 
     // Handle auth errors from SocketIO
@@ -374,6 +443,9 @@ function Dashboard() {
       if (response.totals_monitor) setTotalsData(response.totals_monitor);
       if (response.strike_chain) setStrikeChain(response.strike_chain);
       if (response.oi_strike_monitor) setOiStrikeMonitor(response.oi_strike_monitor);
+      if (response.strike_vwap) setStrikeVwapData(response.strike_vwap);
+      if (response.expected_range) setExpectedRange(response.expected_range);
+      if (response.india_vix) setIndiaVix(response.india_vix);
     });
 
     socketRef.current.on('new_data', (response) => {
@@ -381,31 +453,106 @@ function Dashboard() {
       setIndexLoading(prev => ({ ...prev, [selectedIndex]: false }));
       const newDataPoint = response.latest;
 
-      setData(prevData => {
-        const exists = prevData.find(item => item.timestamp === newDataPoint.timestamp);
-        if (exists) return prevData;
-        return [...prevData, newDataPoint];
-      });
+      // Real-time PE Change vs CE Change graph line crossover detection
+      if (
+        lastPointRef.current &&
+        newDataPoint &&
+        typeof newDataPoint.pe_change === 'number' &&
+        typeof newDataPoint.ce_change === 'number'
+      ) {
+        const prevDiff = lastPointRef.current.pe - lastPointRef.current.ce;
+        const currDiff = newDataPoint.pe_change - newDataPoint.ce_change;
 
-      setTimestamps(prev => {
-        const timeStr = formatTimestamp(newDataPoint.timestamp);
-        if (prev.includes(timeStr)) return prev;
-        return [...prev, timeStr];
-      });
+        let crossedDirection: 'PE_CROSSED_ABOVE' | 'CE_CROSSED_ABOVE' | null = null;
+        if (prevDiff < 0 && currDiff > 0) {
+          // PE line crossed above CE line
+          crossedDirection = 'PE_CROSSED_ABOVE';
+        } else if (prevDiff > 0 && currDiff < 0) {
+          // CE line crossed above PE line
+          crossedDirection = 'CE_CROSSED_ABOVE';
+        } else if (prevDiff < 0 && currDiff === 0) {
+          crossedDirection = 'PE_CROSSED_ABOVE';
+        } else if (prevDiff > 0 && currDiff === 0) {
+          crossedDirection = 'CE_CROSSED_ABOVE';
+        }
+
+        if (crossedDirection && lastAlertTimestampRef.current !== newDataPoint.timestamp) {
+          lastAlertTimestampRef.current = newDataPoint.timestamp;
+          setCrossoverAlert({
+            direction: crossedDirection,
+            time: newDataPoint.timestamp,
+            pe: newDataPoint.pe_change,
+            ce: newDataPoint.ce_change,
+          });
+
+          if (isSoundAlertEnabledRef.current) {
+            playCrossoverBeep(crossedDirection);
+          }
+        }
+      }
+
+      if (
+        newDataPoint &&
+        typeof newDataPoint.pe_change === 'number' &&
+        typeof newDataPoint.ce_change === 'number'
+      ) {
+        lastPointRef.current = {
+          pe: newDataPoint.pe_change,
+          ce: newDataPoint.ce_change,
+          timestamp: newDataPoint.timestamp,
+        };
+        setData(prevData => [...prevData, newDataPoint]);
+      }
+
+      if (response.underlying_diff_array) {
+        setUnderlyingArray(response.underlying_diff_array);
+        const targetLen = response.underlying_diff_array.length;
+        setTimestamps(prev => {
+          const timeStr = formatTimestamp(newDataPoint?.timestamp || '');
+          if (prev.length === targetLen) {
+            return prev;
+          }
+          if (prev.length < targetLen) {
+            const newTimes = [...prev];
+            while (newTimes.length < targetLen) {
+              newTimes.push(timeStr);
+            }
+            return newTimes;
+          }
+          return prev.slice(0, targetLen);
+        });
+      } else if (newDataPoint?.timestamp) {
+        setTimestamps(prev => [...prev, formatTimestamp(newDataPoint.timestamp)]);
+      }
+
+      if (newDataPoint?.timestamp) {
+        setLastUpdate(formatTimestamp(newDataPoint.timestamp));
+      }
 
       setCurrentMaxCE(response.current_max_ce);
       setCurrentMaxPE(response.current_max_pe);
       setCurrentSecondCE(response.current_second_ce);
       setCurrentSecondPE(response.current_second_pe);
 
-      if (response.current_max_ce && response.ce_oi_array) {
+      // Prioritize full maps for all strikes
+      if (response.ce_oi_arrays) {
+        setCeArrays(prev => ({
+          ...prev,
+          ...response.ce_oi_arrays
+        }));
+      } else if (response.current_max_ce && response.ce_oi_array) {
         setCeArrays(prev => ({
           ...prev,
           [response.current_max_ce]: response.ce_oi_array
         }));
       }
 
-      if (response.current_max_pe && response.pe_oi_array) {
+      if (response.pe_oi_arrays) {
+        setPeArrays(prev => ({
+          ...prev,
+          ...response.pe_oi_arrays
+        }));
+      } else if (response.current_max_pe && response.pe_oi_array) {
         setPeArrays(prev => ({
           ...prev,
           [response.current_max_pe]: response.pe_oi_array
@@ -428,6 +575,14 @@ function Dashboard() {
 
       if (response.underlying_diff_array) {
         setUnderlyingArray(response.underlying_diff_array);
+      }
+
+      if (response.first_fetch_underlying) {
+        setFirstFetchIndexValue(response.first_fetch_underlying);
+      }
+
+      if (response.first_fetch_futures) {
+        setFirstFetchFutures(response.first_fetch_futures);
       }
 
       if (response.index_value) {
@@ -454,7 +609,20 @@ function Dashboard() {
         setOiStrikeMonitor(response.oi_strike_monitor);
       }
 
+      if (response.strike_vwap) {
+        setStrikeVwapData(response.strike_vwap);
+      }
+
+      if (response.expected_range) {
+        setExpectedRange(response.expected_range);
+      }
+
+      if (response.india_vix) {
+        setIndiaVix(response.india_vix);
+      }
+
       setConnectionStatus(prev => ({
+        ...prev,
         ...prev,
         totalPoints: response.total_points
       }));
@@ -487,15 +655,22 @@ function Dashboard() {
     socketRef.current.on('full_data', (response) => {
       console.log('📦 Full data received:', response.data?.length || 0, 'points');
 
-      // Check if index has data
+      // Check if index has data yet — backend may still be doing its first fetch
       if (response.total_points === 0 || !response.data || response.data.length === 0) {
         setIndexLoading(prev => ({ ...prev, [selectedIndex]: true }));
         console.log(`⏳ Waiting for first fetch for ${selectedIndex}...`);
-        return; // Don't process empty data
+        // Retry in 3 seconds — backend first fetch may not be done yet
+        setTimeout(() => {
+          if (socketRef.current?.connected) {
+            socketRef.current.emit('request_full_data', { index: selectedIndex });
+          }
+        }, 3000);
+        return;
       }
 
-      // Index has data, mark as loaded
+      // Index has data — mark fully loaded & first fetch complete
       setIndexLoading(prev => ({ ...prev, [selectedIndex]: false }));
+      setConnectionStatus(prev => ({ ...prev, firstFetchComplete: true }));
 
       if (response.data) {
         setData(response.data);
@@ -539,6 +714,9 @@ function Dashboard() {
         if (response.totals_monitor) setTotalsData(response.totals_monitor);
         if (response.strike_chain) setStrikeChain(response.strike_chain);
         if (response.oi_strike_monitor) setOiStrikeMonitor(response.oi_strike_monitor);
+        if (response.strike_vwap) setStrikeVwapData(response.strike_vwap);
+        if (response.expected_range) setExpectedRange(response.expected_range);
+        if (response.india_vix) setIndiaVix(response.india_vix);
 
       }
     });
@@ -587,6 +765,17 @@ function Dashboard() {
 
         if (result.data.length > 0) {
           const latest = result.data[result.data.length - 1];
+          if (
+            latest &&
+            typeof latest.pe_change === 'number' &&
+            typeof latest.ce_change === 'number'
+          ) {
+            lastPointRef.current = {
+              pe: latest.pe_change,
+              ce: latest.ce_change,
+              timestamp: latest.timestamp,
+            };
+          }
           try {
             const parts = latest.timestamp.split(' ');
             const timePart = parts[1];
@@ -618,6 +807,9 @@ function Dashboard() {
         if (result.totals_monitor) setTotalsData(result.totals_monitor);
         if (result.strike_chain) setStrikeChain(result.strike_chain);
         if (result.oi_strike_monitor) setOiStrikeMonitor(result.oi_strike_monitor);
+        if (result.strike_vwap) setStrikeVwapData(result.strike_vwap);
+        if (result.expected_range) setExpectedRange(result.expected_range);
+        if (result.india_vix) setIndiaVix(result.india_vix);
       }
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -733,70 +925,95 @@ function Dashboard() {
   };
 
 
-  const chartData = useMemo(() => ({
-    labels: data.map(item => formatTimestamp(item.timestamp)),
-    datasets: [
-      {
-        label: 'PE Change',
-        data: data.map(item => item.pe_change),
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderWidth: 2,
-        fill: false,
-        tension: 0.1,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-      },
-      {
-        label: 'CE Change',
-        data: data.map(item => item.ce_change),
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        borderWidth: 2,
-        fill: false,
-        tension: 0.1,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-      },
-    ],
-  }), [data]);
+  const chartData = useMemo(() => {
+    const validData = data.filter(item =>
+      item &&
+      typeof item.pe_change === 'number' && !isNaN(item.pe_change) &&
+      typeof item.ce_change === 'number' && !isNaN(item.ce_change)
+    );
+    return {
+      labels: validData.map(item => formatTimestamp(item.timestamp)),
+      datasets: [
+        {
+          label: 'PE Change',
+          data: validData.map(item => item.pe_change),
+          borderColor: '#10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          spanGaps: true,
+        },
+        {
+          label: 'CE Change',
+          data: validData.map(item => item.ce_change),
+          borderColor: '#EF4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          spanGaps: true,
+        },
+      ],
+    };
+  }, [data]);
 
   const strikeChartData = useMemo(() => {
     const datasets: any[] = [];
     let ceColorIndex = 0;
     let peColorIndex = 0;
 
+    const targetLen = timestamps.length;
+    const alignArray = (arr: number[] | undefined) => {
+      if (!arr || arr.length === 0) return [];
+      if (arr.length === targetLen) return arr;
+      if (arr.length > targetLen) return arr.slice(0, targetLen);
+      const lastVal = arr[arr.length - 1];
+      const padded = [...arr];
+      while (padded.length < targetLen) {
+        padded.push(lastVal);
+      }
+      return padded;
+    };
+
     if (underlyingArray.length > 0) {
+      const aligned = alignArray(underlyingArray);
       datasets.push({
         label: 'Underlying Diff',
-        data: underlyingArray.map(val => val / 5),
+        data: aligned.map(val => val / 5),
         borderColor: '#FFFFFF',
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 3,
         fill: false,
-        tension: 0.1,
+        tension: 0,
         pointRadius: 0,
         pointHoverRadius: 0,
+        spanGaps: true,
         yAxisID: 'y',
-        originalData: underlyingArray,
-
+        originalData: aligned,
       });
     }
 
     if (futuresDiffArray.length > 0) {
+      const aligned = alignArray(futuresDiffArray);
       datasets.push({
         label: 'Futures Diff',
-        data: futuresDiffArray.map(val => val / 5),
+        data: aligned.map(val => val / 5),
         borderColor: '#FCD34D',
         backgroundColor: 'rgba(252, 211, 77, 0.1)',
         borderWidth: 3,
         borderDash: [5, 3],
         fill: false,
-        tension: 0.1,
+        tension: 0,
         pointRadius: 0,
         pointHoverRadius: 0,
+        spanGaps: true,
         yAxisID: 'y',
-        originalData: futuresDiffArray,
+        originalData: aligned,
       });
     }
 
@@ -807,14 +1024,15 @@ function Dashboard() {
         const isSecondMax = strike === currentSecondCE;
         datasets.push({
           label: `CE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
-          data: ceArrays[strike],
+          data: alignArray(ceArrays[strike]),
           borderColor: CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length],
           backgroundColor: `${CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length]}20`,
           borderWidth: 2,
           fill: false,
-          tension: 0.1,
+          tension: 0,
           pointRadius: 0,
           pointHoverRadius: 0,
+          spanGaps: true,
           yAxisID: 'y',
         });
         ceColorIndex++;
@@ -828,14 +1046,15 @@ function Dashboard() {
         const isSecondMax = strike === currentSecondPE;
         datasets.push({
           label: `PE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
-          data: peArrays[strike],
+          data: alignArray(peArrays[strike]),
           borderColor: PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length],
           backgroundColor: `${PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length]}20`,
           borderWidth: 2,
           fill: false,
-          tension: 0.1,
+          tension: 0,
           pointRadius: 0,
           pointHoverRadius: 0,
+          spanGaps: true,
           yAxisID: 'y',
         });
         peColorIndex++;
@@ -846,12 +1065,13 @@ function Dashboard() {
       labels: timestamps,
       datasets,
     };
-  }, [timestamps, underlyingArray, ceArrays, peArrays, top10CEStrikes, top10PEStrikes, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, userSelectedCE, userSelectedPE]);
+  }, [timestamps, underlyingArray, futuresDiffArray, ceArrays, peArrays, top10CEStrikes, top10PEStrikes, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, userSelectedCE, userSelectedPE]);
 
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         position: 'top' as const,
@@ -886,10 +1106,6 @@ function Dashboard() {
         ticks: { color: '#9CA3AF' },
       },
     },
-    animation: {
-      duration: 750,
-      easing: 'easeInOutQuart',
-    },
   };
 
 
@@ -901,6 +1117,7 @@ function Dashboard() {
     return {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       interaction: {
         mode: 'index' as const,
         intersect: false,
@@ -1231,10 +1448,6 @@ function Dashboard() {
           }
         }
       },
-      animation: {
-        duration: 750,
-        easing: 'easeInOutQuart' as const,
-      },
     };
   }, [selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, firstFetchIndexValue]);
 
@@ -1329,19 +1542,32 @@ function Dashboard() {
       </div>
 
       <div className="p-6">
-        {/* Strike Selection Grid */}
+        {/* NIFTY Expected Range Calculator Card (Horizontal Layout: Daily Left, Weekly Middle, Monthly Right) */}
+        <div className="mb-4">
+          <NiftyExpectedRangeCard
+            data={expectedRange}
+            selectedIndex={selectedIndex}
+            spotPrice={indexValue}
+            vix={indiaVix}
+          />
+        </div>
+
+        {/* CE Strikes (Left) & PE Strikes (Right) side-by-side */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* CE Strikes Section */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-blue-400">CE Strikes (Above Underlying)</h3>
+          {/* CE Strikes Section (Left) */}
+          <div className="bg-gray-800 rounded-lg p-3.5 border border-blue-500/30 shadow-md">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wide">CE Strikes (Above Underlying)</h3>
+              </div>
               <div className="relative">
                 <button
                   onClick={() => setShowCEDropdown(!showCEDropdown)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-md text-sm flex items-center space-x-1"
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold flex items-center space-x-1"
                 >
                   <span>Add Strike</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </button>
 
                 {showCEDropdown && (
@@ -1350,7 +1576,7 @@ function Dashboard() {
                       <button
                         key={strike}
                         onClick={() => handleCEStrikeSelect(strike)}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-600 text-white"
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-600 text-white text-xs"
                       >
                         {strike}
                       </button>
@@ -1360,7 +1586,7 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {getSelectedCEStrikes().map((strike) => {
                 const greeks = strikeGreeks[`CE_${strike}`] || { iv: 0, gamma: 0, delta: 0, theta: 0, vega: 0 };
                 const isMax = strike === currentMaxCE;
@@ -1368,14 +1594,14 @@ function Dashboard() {
                 return (
                   <div
                     key={`ce-${strike}`}
-                    className={`p-4 rounded-lg border-2 ${isMax
+                    className={`p-2.5 rounded-lg border-2 ${isMax
                         ? 'bg-blue-600 border-blue-400'
                         : 'bg-gray-700 border-gray-600'
                       }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xl font-bold">{strike}</span>
-                      {isMax && <span className="text-yellow-300">⭐</span>}
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base font-bold">{strike}</span>
+                      {isMax && <span className="text-yellow-300 text-sm">⭐</span>}
                       {!isMax && (
                         <button
                           onClick={() => handleCEStrikeSelect(strike)}
@@ -1385,7 +1611,7 @@ function Dashboard() {
                         </button>
                       )}
                     </div>
-                    <div className="space-y-1 text-xs">
+                    <div className="space-y-0.5 text-xs">
                       <div className="flex justify-between">
                         <span className="text-gray-300">IV:</span>
                         <span className="font-semibold text-blue-300">{greeks.iv.toFixed(2)}%</span>
@@ -1413,17 +1639,20 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* PE Strikes Section */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-orange-400">PE Strikes (Below Underlying)</h3>
+          {/* PE Strikes Section (Right) */}
+          <div className="bg-gray-800 rounded-lg p-3.5 border border-orange-500/30 shadow-md">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wide">PE Strikes (Below Underlying)</h3>
+              </div>
               <div className="relative">
                 <button
                   onClick={() => setShowPEDropdown(!showPEDropdown)}
-                  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 rounded-md text-sm flex items-center space-x-1"
+                  className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 rounded text-xs font-semibold flex items-center space-x-1"
                 >
                   <span>Add Strike</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </button>
 
                 {showPEDropdown && (
@@ -1432,7 +1661,7 @@ function Dashboard() {
                       <button
                         key={strike}
                         onClick={() => handlePEStrikeSelect(strike)}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-600 text-white"
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-600 text-white text-xs"
                       >
                         {strike}
                       </button>
@@ -1442,7 +1671,7 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {getSelectedPEStrikes().map((strike) => {
                 const greeks = strikeGreeks[`PE_${strike}`] || { iv: 0, gamma: 0, delta: 0, theta: 0, vega: 0 };
                 const isMax = strike === currentMaxPE;
@@ -1450,14 +1679,14 @@ function Dashboard() {
                 return (
                   <div
                     key={`pe-${strike}`}
-                    className={`p-4 rounded-lg border-2 ${isMax
+                    className={`p-2.5 rounded-lg border-2 ${isMax
                         ? 'bg-orange-600 border-orange-400'
                         : 'bg-gray-700 border-gray-600'
                       }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xl font-bold">{strike}</span>
-                      {isMax && <span className="text-yellow-300">⭐</span>}
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base font-bold">{strike}</span>
+                      {isMax && <span className="text-yellow-300 text-sm">⭐</span>}
                       {!isMax && (
                         <button
                           onClick={() => handlePEStrikeSelect(strike)}
@@ -1467,7 +1696,7 @@ function Dashboard() {
                         </button>
                       )}
                     </div>
-                    <div className="space-y-1 text-xs">
+                    <div className="space-y-0.5 text-xs">
                       <div className="flex justify-between">
                         <span className="text-gray-300">IV:</span>
                         <span className="font-semibold text-blue-300">{greeks.iv.toFixed(2)}%</span>
@@ -1532,9 +1761,18 @@ function Dashboard() {
               underlying={indexValue}
               r1={r1Val}
               s1={s1Val}
+              onRowClick={(strike, side) => setVwapModalSelected({ strike, side })}
             />
           );
         })()}
+
+        {/* VWAP Candlestick Popup Modal */}
+        <StrikeVwapModal
+          selected={vwapModalSelected}
+          vwapData={strikeVwapData}
+          selectedIndex={selectedIndex}
+          onClose={() => setVwapModalSelected(null)}
+        />
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
@@ -1588,6 +1826,94 @@ function Dashboard() {
 
           {/* PE/CE Change Chart */}
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                  PE vs CE Change (Live Trend)
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Audio Beep Alert Toggle */}
+                <button
+                  onClick={() => {
+                    setIsSoundAlertEnabled(prev => {
+                      const next = !prev;
+                      try {
+                        localStorage.setItem('crossover_sound_alert', String(next));
+                      } catch (e) {
+                        console.warn(e);
+                      }
+                      return next;
+                    });
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                    isSoundAlertEnabled
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white ring-1 ring-emerald-400'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                  }`}
+                  title={isSoundAlertEnabled ? 'Crossover Beep Alert is ACTIVE' : 'Crossover Beep Alert is MUTED'}
+                >
+                  {isSoundAlertEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  <span>Beep Alert: {isSoundAlertEnabled ? 'ON' : 'OFF'}</span>
+                </button>
+
+                {/* Test Beep Button */}
+                <button
+                  onClick={() => testBeepSound()}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  title="Click to test crossover beep audio and unlock browser sound"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  <span>Test Beep</span>
+                </button>
+
+                {/* Reset Zoom */}
+                <button
+                  onClick={() => {
+                    if (chartRef.current) {
+                      chartRef.current.resetZoom();
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs font-bold flex items-center gap-1 text-white shadow-sm"
+                  title="Reset chart zoom"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Reset Zoom</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Crossover Alert Banner */}
+            {crossoverAlert && (
+              <div
+                className={`mb-3 p-2.5 rounded-lg border text-xs sm:text-sm font-bold flex items-center justify-between gap-2 shadow-lg animate-pulse ${
+                  crossoverAlert.direction === 'PE_CROSSED_ABOVE'
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200'
+                    : 'bg-rose-950/80 border-rose-500 text-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚡</span>
+                  <span>
+                    {crossoverAlert.direction === 'PE_CROSSED_ABOVE'
+                      ? 'CROSSOVER ALERT: PE Line Crossed ABOVE CE Line (Bullish Trend)'
+                      : 'CROSSOVER ALERT: CE Line Crossed ABOVE PE Line (Bearish Trend)'}
+                  </span>
+                  <span className="font-mono text-xs opacity-75">
+                    ({formatTimestamp(crossoverAlert.time)})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setCrossoverAlert(null)}
+                  className="px-2 py-0.5 rounded bg-black/30 hover:bg-black/50 text-xs text-gray-300 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="h-[512px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
@@ -1685,6 +2011,17 @@ function AppContent() {
             <div className="min-h-screen bg-gray-900">
               <NavBar />
               <TradeJournal />
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gray-950">
+              <NavBar />
+              <AnalyticsPage />
             </div>
           </ProtectedRoute>
         }
