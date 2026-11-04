@@ -711,3 +711,4 @@ export const IndividualStrikeAnalysis: React.FC<IndividualStrikeAnalysisProps> =
     </div>
   );
 };
+

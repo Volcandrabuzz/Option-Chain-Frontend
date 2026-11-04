@@ -568,3 +568,4 @@ export const AllStrikesTable: React.FC<AllStrikesTableProps> = ({
     </div>
   );
 };
+

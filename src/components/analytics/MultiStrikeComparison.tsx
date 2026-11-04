@@ -418,3 +418,4 @@ export const MultiStrikeComparison: React.FC<MultiStrikeComparisonProps> = ({
     </div>
   );
 };
+
