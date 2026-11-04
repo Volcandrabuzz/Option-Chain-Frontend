@@ -34,7 +34,7 @@ import {
 import annotationPlugin from 'chartjs-plugin-annotation';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line } from 'react-chartjs-2';
-import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown, LogOut, BookOpen, Volume2, VolumeX, Bell, BarChart2 } from 'lucide-react';
+import { Activity, Wifi, WifiOff, RefreshCw, ChevronDown, LogOut, BookOpen, Volume2, VolumeX, Bell, BarChart2, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import { playCrossoverBeep, testBeepSound } from './utils/audioAlert';
 
 ChartJS.register(
@@ -216,6 +216,10 @@ function Dashboard() {
   const [currentMaxPE, setCurrentMaxPE] = useState<number | null>(null);
   const [currentSecondCE, setCurrentSecondCE] = useState<number | null>(null);
   const [currentSecondPE, setCurrentSecondPE] = useState<number | null>(null);
+
+  // Layout and display settings for Strike OI line graph
+  const [showStrikeAxisLabels, setShowStrikeAxisLabels] = useState(false);
+  const [isStrikeChartFullWidth, setIsStrikeChartFullWidth] = useState(true);
 
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
   const [peArrays, setPeArrays] = useState<StrikeData>({});
@@ -942,8 +946,8 @@ function Dashboard() {
           borderWidth: 2,
           fill: false,
           tension: 0,
-          pointRadius: 0,
-          pointHoverRadius: 0,
+          pointRadius: validData.length === 1 ? 4 : 0,
+          pointHoverRadius: 4,
           spanGaps: true,
         },
         {
@@ -954,8 +958,8 @@ function Dashboard() {
           borderWidth: 2,
           fill: false,
           tension: 0,
-          pointRadius: 0,
-          pointHoverRadius: 0,
+          pointRadius: validData.length === 1 ? 4 : 0,
+          pointHoverRadius: 4,
           spanGaps: true,
         },
       ],
@@ -1131,10 +1135,7 @@ function Dashboard() {
           },
         },
         title: {
-          display: true,
-          text: 'Strike OI Changes & Underlying Movement',
-          color: '#F9FAFB',
-          font: { size: 18, weight: 'bold' as const },
+          display: false, // Moved to card header to give maximum height to the line graph
         },
         tooltip: {
           mode: 'index' as const,
@@ -1192,17 +1193,17 @@ function Dashboard() {
                 yMin: (currentSecondCE - firstFetchIndexValue) / 5,
                 yMax: (currentSecondCE - firstFetchIndexValue) / 5,
                 borderColor: '#991B1B',
-                borderWidth: 5,
+                borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `R2: ${currentSecondCE}`,
                   position: 'start' as const,
                   backgroundColor: '#991B1B',
                   color: '#FFFFFF',
-                  padding: 5,
+                  padding: 4,
                   font: {
-                    size: 10,
+                    size: 9,
                     weight: 'bold' as const
                   }
                 }
@@ -1215,17 +1216,17 @@ function Dashboard() {
                 yMin: (currentMaxCE - firstFetchIndexValue) / 5,
                 yMax: (currentMaxCE - firstFetchIndexValue) / 5,
                 borderColor: '#EF4444',
-                borderWidth: 5,
+                borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `R1: ${currentMaxCE}`,
                   position: 'start' as const,
                   backgroundColor: '#EF4444',
                   color: '#FFFFFF',
-                  padding: 5,
+                  padding: 4,
                   font: {
-                    size: 10,
+                    size: 9,
                     weight: 'bold' as const
                   }
                 }
@@ -1238,17 +1239,17 @@ function Dashboard() {
                 yMin: (currentMaxPE - firstFetchIndexValue) / 5,
                 yMax: (currentMaxPE - firstFetchIndexValue) / 5,
                 borderColor: '#10B981',
-                borderWidth: 5,
+                borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `S1: ${currentMaxPE}`,
                   position: 'start' as const,
                   backgroundColor: '#10B981',
                   color: '#FFFFFF',
-                  padding: 5,
+                  padding: 4,
                   font: {
-                    size: 10,
+                    size: 9,
                     weight: 'bold' as const
                   }
                 }
@@ -1261,17 +1262,17 @@ function Dashboard() {
                 yMin: (currentSecondPE - firstFetchIndexValue) / 5,
                 yMax: (currentSecondPE - firstFetchIndexValue) / 5,
                 borderColor: '#047857',
-                borderWidth: 5,
+                borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `S2: ${currentSecondPE}`,
                   position: 'start' as const,
                   backgroundColor: '#047857',
                   color: '#FFFFFF',
-                  padding: 5,
+                  padding: 4,
                   font: {
-                    size: 10,
+                    size: 9,
                     weight: 'bold' as const
                   }
                 }
@@ -1285,14 +1286,14 @@ function Dashboard() {
                 yMin: (userPivotLevels.r2 - firstFetchIndexValue) / 5,
                 yMax: (userPivotLevels.r2 - firstFetchIndexValue) / 5,
                 borderColor: '#DC2626',
-                borderWidth: 3,
+                borderWidth: 2,
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `User R2: ${userPivotLevels.r2}`,
                   position: 'start' as const,
                   backgroundColor: '#DC2626',
                   color: '#FFFFFF',
-                  padding: 4,
+                  padding: 3,
                   font: {
                     size: 8,
                     weight: 'bold' as const
@@ -1308,14 +1309,14 @@ function Dashboard() {
                 yMin: (userPivotLevels.r1 - firstFetchIndexValue) / 5,
                 yMax: (userPivotLevels.r1 - firstFetchIndexValue) / 5,
                 borderColor: '#EF4444',
-                borderWidth: 3,
+                borderWidth: 2,
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `User R1: ${userPivotLevels.r1}`,
                   position: 'start' as const,
                   backgroundColor: '#EF4444',
                   color: '#FFFFFF',
-                  padding: 4,
+                  padding: 3,
                   font: {
                     size: 8,
                     weight: 'bold' as const
@@ -1331,14 +1332,14 @@ function Dashboard() {
                 yMin: (userPivotLevels.pivot - firstFetchIndexValue) / 5,
                 yMax: (userPivotLevels.pivot - firstFetchIndexValue) / 5,
                 borderColor: '#FBBF24',
-                borderWidth: 3,
+                borderWidth: 2,
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `Pivot: ${userPivotLevels.pivot}`,
                   position: 'center' as const,
                   backgroundColor: '#FBBF24',
                   color: '#000000',
-                  padding: 4,
+                  padding: 3,
                   font: {
                     size: 8,
                     weight: 'bold' as const
@@ -1354,14 +1355,14 @@ function Dashboard() {
                 yMin: (userPivotLevels.s1 - firstFetchIndexValue) / 5,
                 yMax: (userPivotLevels.s1 - firstFetchIndexValue) / 5,
                 borderColor: '#10B981',
-                borderWidth: 3,
+                borderWidth: 2,
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `User S1: ${userPivotLevels.s1}`,
                   position: 'start' as const,
                   backgroundColor: '#10B981',
                   color: '#FFFFFF',
-                  padding: 4,
+                  padding: 3,
                   font: {
                     size: 8,
                     weight: 'bold' as const
@@ -1377,14 +1378,14 @@ function Dashboard() {
                 yMin: (userPivotLevels.s2 - firstFetchIndexValue) / 5,
                 yMax: (userPivotLevels.s2 - firstFetchIndexValue) / 5,
                 borderColor: '#047857',
-                borderWidth: 3,
+                borderWidth: 2,
                 label: {
-                  display: true,
+                  display: showStrikeAxisLabels,
                   content: `User S2: ${userPivotLevels.s2}`,
                   position: 'start' as const,
                   backgroundColor: '#047857',
                   color: '#FFFFFF',
-                  padding: 4,
+                  padding: 3,
                   font: {
                     size: 8,
                     weight: 'bold' as const
@@ -1398,7 +1399,14 @@ function Dashboard() {
       scales: {
         x: {
           grid: { color: '#374151' },
-          ticks: { color: '#9CA3AF', maxTicksLimit: 10 },
+          ticks: {
+            display: showStrikeAxisLabels,
+            color: '#9CA3AF',
+            maxTicksLimit: 12
+          },
+          title: {
+            display: false,
+          }
         },
         y: {
           type: 'linear' as const,
@@ -1408,6 +1416,7 @@ function Dashboard() {
           min: initialMin,
           max: initialMax,
           ticks: {
+            display: showStrikeAxisLabels,
             color: '#10B981',
             stepSize: 20,
             callback: function (tickValue: string | number) {
@@ -1416,10 +1425,7 @@ function Dashboard() {
             }
           },
           title: {
-            display: true,
-            text: 'Difference',
-            color: '#10B981',
-            font: { size: 14, weight: 'bold' as const }
+            display: false, // Don't write Difference title on left
           }
         },
         y1: {
@@ -1432,6 +1438,7 @@ function Dashboard() {
           min: initialMin,
           max: initialMax,
           ticks: {
+            display: showStrikeAxisLabels,
             color: '#FBBF24',
             stepSize: 20,
             callback: function (tickValue: string | number) {
@@ -1441,15 +1448,12 @@ function Dashboard() {
             }
           },
           title: {
-            display: true,
-            text: `${selectedIndex} Value`,
-            color: '#FBBF24',
-            font: { size: 14, weight: 'bold' as const }
+            display: false, // Don't write Strike Price title on right
           }
         }
       },
     };
-  }, [selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, firstFetchIndexValue]);
+  }, [selectedIndex, currentMaxCE, currentSecondCE, currentMaxPE, currentSecondPE, firstFetchIndexValue, userPivotLevels, showStrikeAxisLabels]);
 
   return (
     <div className="text-white">
@@ -1778,27 +1782,70 @@ function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
 
           {/* Strike OI Chart */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <button
-                onClick={() => setShowPivotDialog(true)}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-semibold flex items-center space-x-2"
-              >
-                <span>⚙️ Set Pivot Levels</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (strikeChartRef.current) {
-                    strikeChartRef.current.resetZoom();
-                  }
-                }}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-md text-sm flex items-center space-x-1"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Reset Zoom</span>
-              </button>
+          <div className={`${isStrikeChartFullWidth ? 'col-span-1 lg:col-span-2' : ''} bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg transition-all duration-300`}>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                  Strike OI Changes &amp; Underlying Movement
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Set Pivots */}
+                <button
+                  onClick={() => setShowPivotDialog(true)}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs font-bold text-white flex items-center gap-1.5 shadow-sm transition-all"
+                  title="Configure manual pivot and support/resistance levels"
+                >
+                  <span>⚙️ Set Pivots</span>
+                </button>
+
+                {/* Toggle Axis Labels (Off by default for maximum space) */}
+                <button
+                  onClick={() => setShowStrikeAxisLabels(prev => !prev)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+                    showStrikeAxisLabels
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                  title={showStrikeAxisLabels ? 'Axis labels (left/right/bottom) are VISIBLE. Click to hide for maximum chart space.' : 'Axis labels are HIDDEN for maximum chart space. Click to show.'}
+                >
+                  {showStrikeAxisLabels ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  <span>{showStrikeAxisLabels ? 'Labels: ON' : 'Labels: OFF (Spacious)'}</span>
+                </button>
+
+                {/* Toggle Full Width */}
+                <button
+                  onClick={() => setIsStrikeChartFullWidth(prev => !prev)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+                    isStrikeChartFullWidth
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                  title={isStrikeChartFullWidth ? 'Switch to side-by-side split view' : 'Switch to full-width view for maximum line visibility'}
+                >
+                  {isStrikeChartFullWidth ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  <span>{isStrikeChartFullWidth ? 'Split View' : 'Full Width'}</span>
+                </button>
+
+                {/* Reset Zoom */}
+                <button
+                  onClick={() => {
+                    if (strikeChartRef.current) {
+                      strikeChartRef.current.resetZoom();
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs font-bold flex items-center gap-1 text-white shadow-sm"
+                  title="Reset chart zoom"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Reset Zoom</span>
+                </button>
+              </div>
             </div>
-            <div className="h-[512px] w-full">
+
+            <div className="h-[680px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
@@ -1825,7 +1872,7 @@ function Dashboard() {
           </div>
 
           {/* PE/CE Change Chart */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className={`${isStrikeChartFullWidth ? 'col-span-1 lg:col-span-2' : ''} bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg transition-all duration-300`}>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -1914,7 +1961,7 @@ function Dashboard() {
               </div>
             )}
 
-            <div className="h-[512px] w-full">
+            <div className="h-[680px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
