@@ -219,7 +219,6 @@ function Dashboard() {
 
   // Layout and display settings for Strike OI line graph
   const [showStrikeAxisLabels, setShowStrikeAxisLabels] = useState(false);
-  const [isStrikeChartFullWidth, setIsStrikeChartFullWidth] = useState(true);
 
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
   const [peArrays, setPeArrays] = useState<StrikeData>({});
@@ -1782,7 +1781,7 @@ function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
 
           {/* Strike OI Chart */}
-          <div className={`${isStrikeChartFullWidth ? 'col-span-1 lg:col-span-2' : ''} bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg transition-all duration-300`}>
+          <div className="bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg">
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
@@ -1812,21 +1811,7 @@ function Dashboard() {
                   title={showStrikeAxisLabels ? 'Axis labels (left/right/bottom) are VISIBLE. Click to hide for maximum chart space.' : 'Axis labels are HIDDEN for maximum chart space. Click to show.'}
                 >
                   {showStrikeAxisLabels ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  <span>{showStrikeAxisLabels ? 'Labels: ON' : 'Labels: OFF (Spacious)'}</span>
-                </button>
-
-                {/* Toggle Full Width */}
-                <button
-                  onClick={() => setIsStrikeChartFullWidth(prev => !prev)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
-                    isStrikeChartFullWidth
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  }`}
-                  title={isStrikeChartFullWidth ? 'Switch to side-by-side split view' : 'Switch to full-width view for maximum line visibility'}
-                >
-                  {isStrikeChartFullWidth ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                  <span>{isStrikeChartFullWidth ? 'Split View' : 'Full Width'}</span>
+                  <span>{showStrikeAxisLabels ? 'Labels: ON' : 'Labels: OFF'}</span>
                 </button>
 
                 {/* Reset Zoom */}
@@ -1845,7 +1830,7 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className="h-[680px] w-full">
+            <div className="h-[560px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
@@ -1872,7 +1857,7 @@ function Dashboard() {
           </div>
 
           {/* PE/CE Change Chart */}
-          <div className={`${isStrikeChartFullWidth ? 'col-span-1 lg:col-span-2' : ''} bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg transition-all duration-300`}>
+          <div className="bg-gray-800 rounded-lg p-5 border border-gray-700 shadow-lg">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -1961,7 +1946,7 @@ function Dashboard() {
               </div>
             )}
 
-            <div className="h-[680px] w-full">
+            <div className="h-[560px] w-full">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center space-x-2">
