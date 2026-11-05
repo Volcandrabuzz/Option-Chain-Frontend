@@ -88,21 +88,25 @@ export const IndividualStrikeAnalysis: React.FC<IndividualStrikeAnalysisProps> =
   // References to charts for reset zoom
   const chartRefs = useRef<{ [key: string]: any }>({});
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const res = await fetchStrikeAnalysis(indexName, strike, side, expiry, timeframe);
       setData(res);
     } catch (err: any) {
-      setError(err.message || 'Failed to load strike time-series data');
+      if (!silent) setError(err.message || 'Failed to load strike time-series data');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [indexName, strike, side, expiry, timeframe]);
 
   const series = data?.series || [];

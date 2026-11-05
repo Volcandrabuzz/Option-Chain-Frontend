@@ -63,25 +63,29 @@ export const MultiStrikeComparison: React.FC<MultiStrikeComparisonProps> = ({
 
   const chartRef = useRef<any>(null);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     if (selectedStrikes.length === 0) {
       setData(null);
       return;
     }
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const res = await fetchMultiStrike(indexName, selectedStrikes, side, expiry, timeframe);
       setData(res);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch multi-strike comparison');
+      if (!silent) setError(err.message || 'Failed to fetch multi-strike comparison');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [indexName, selectedStrikes, side, expiry, timeframe]);
 
   const resetZoom = () => {

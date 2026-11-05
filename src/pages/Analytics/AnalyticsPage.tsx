@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { SERVER_URL, useAuth } from '../../context/AuthContext';
 import {
   AllStrikesResponse,
   fetchAllStrikes,
@@ -17,6 +19,9 @@ import {
 } from 'lucide-react';
 
 export const AnalyticsPage: React.FC = () => {
+  const { getAccessToken } = useAuth();
+  const socketRef = useRef<Socket | null>(null);
+
   // Global filter states
   const [indices, setIndices] = useState<string[]>(['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']);
   const [selectedIndex, setSelectedIndex] = useState<string>('NIFTY');
@@ -52,9 +57,9 @@ export const AnalyticsPage: React.FC = () => {
     initFilters();
   }, []);
 
-  // 2. Load chain data when index or expiry changes
-  const loadChain = useCallback(async () => {
-    setIsLoading(true);
+  // 2. Load chain data when index or expiry changes (supports silent background reload without UI flash)
+  const loadChain = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const res = await fetchAllStrikes(selectedIndex, selectedExpiry || undefined);
@@ -85,23 +90,81 @@ export const AnalyticsPage: React.FC = () => {
         setSelectedStrikeForAnalysis(res.atm_strike);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch option chain data');
+      if (!silent) setError(err.message || 'Failed to fetch option chain data');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
-  }, [selectedIndex, selectedExpiry]);
+  }, [selectedIndex, selectedExpiry, comparisonStrikes.length, selectedStrikeForAnalysis]);
 
   useEffect(() => {
-    loadChain();
+    loadChain(false);
   }, [loadChain]);
 
-  // Handle changing index: clear old strikes to avoid invalid selections
+  // 3. Live Socket.IO Stream integration for real-time spot and chain updates
+  useEffect(() => {
+    const token = getAccessToken();
+    const isLocal = typeof window !== 'undefined' && window.location.origin.includes('localhost');
+    const socket = io(SERVER_URL, {
+      transports: isLocal ? ['polling', 'websocket'] : ['websocket'],
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('✅ Analytics connected to live market stream');
+      socket.emit('change_index', { index: selectedIndex });
+    });
+
+    const handleIncomingLiveUpdate = (data: any) => {
+      const targetIndex = data?.index_name || data?.index;
+      if (!targetIndex || targetIndex === selectedIndex) {
+        const liveSpot = data?.spot_price || data?.index_value;
+        if (liveSpot) {
+          setChainData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  spot_price: Number(liveSpot),
+                  futures_price: data.futures_price ?? prev.futures_price,
+                  timestamp: data.timestamp || data.latest?.timestamp || prev.timestamp,
+                }
+              : null
+          );
+        }
+        // Quietly refresh full chain without showing spinner
+        loadChain(true);
+      }
+    };
+
+    socket.on('analytics_update', handleIncomingLiveUpdate);
+    socket.on('new_data', handleIncomingLiveUpdate);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [selectedIndex, loadChain, getAccessToken]);
+
+  // 4. Resilient background auto-poll timer (every 4 seconds) to guarantee real-time updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      loadChain(true);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [loadChain]);
+
+  // Handle changing index: clear old strikes to avoid invalid selections and notify socket
   const handleIndexChange = (newIndex: string) => {
     if (newIndex !== selectedIndex) {
       setSelectedIndex(newIndex);
       setSelectedExpiry('');
       setSelectedStrikeForAnalysis(null);
       setComparisonStrikes([]);
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('change_index', { index: newIndex });
+      }
     }
   };
 
@@ -210,9 +273,12 @@ export const AnalyticsPage: React.FC = () => {
           selectedSide={selectedSide}
           onSelectSide={setSelectedSide}
           timestamp={chainData?.timestamp || 'N/A'}
+          spotPrice={chainData?.spot_price}
+          futuresPrice={chainData?.futures_price}
+          atmStrike={chainData?.atm_strike}
           isMarketHours={isMarketHours}
           isLoading={isLoading}
-          onRefresh={loadChain}
+          onRefresh={() => loadChain(false)}
         />
 
         {/* Error Alert if any */}

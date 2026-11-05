@@ -14,6 +14,9 @@ interface AnalyticsFilterBarProps {
   selectedSide: 'CE' | 'PE';
   onSelectSide: (side: 'CE' | 'PE') => void;
   timestamp: string;
+  spotPrice?: number;
+  futuresPrice?: number | null;
+  atmStrike?: number;
   isMarketHours: boolean;
   isLoading: boolean;
   onRefresh: () => void;
@@ -32,6 +35,9 @@ export const AnalyticsFilterBar: React.FC<AnalyticsFilterBarProps> = ({
   selectedSide,
   onSelectSide,
   timestamp,
+  spotPrice,
+  futuresPrice,
+  atmStrike,
   isMarketHours,
   isLoading,
   onRefresh,
@@ -60,6 +66,22 @@ export const AnalyticsFilterBar: React.FC<AnalyticsFilterBarProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Live Spot Price & ATM Indicator */}
+          {typeof spotPrice === 'number' && spotPrice > 0 && (
+            <div className="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 shadow-sm animate-pulse">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Spot:</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-300 font-mono">
+                ₹{spotPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              {atmStrike && (
+                <span className="text-[10px] font-bold text-yellow-400 bg-yellow-500/20 px-1.5 py-0.5 rounded border border-yellow-500/30">
+                  ATM {atmStrike}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Expiry Selector */}
           <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
