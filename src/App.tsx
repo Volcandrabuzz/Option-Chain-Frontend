@@ -16,6 +16,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import TradeJournal from './pages/TradeJournal';
 import { AnalyticsPage } from './pages/Analytics/AnalyticsPage';
+import { PaperTradingPage } from './pages/PaperTrading/PaperTradingPage';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -133,6 +134,16 @@ function NavBar() {
               <span>F&O Analytics</span>
             </Link>
             <Link
+              to="/paper-trading"
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${isActive('/paper-trading')
+                  ? 'bg-emerald-500/20 text-emerald-400 font-black'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                }`}
+            >
+              <Activity className="h-4 w-4 text-emerald-400" />
+              <span>Paper Trading</span>
+            </Link>
+            <Link
               to="/trades"
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${isActive('/trades')
                   ? 'bg-purple-500/20 text-purple-400'
@@ -217,9 +228,6 @@ function Dashboard() {
   const [currentSecondCE, setCurrentSecondCE] = useState<number | null>(null);
   const [currentSecondPE, setCurrentSecondPE] = useState<number | null>(null);
 
-  // Layout and display settings for Strike OI line graph
-  const [showStrikeAxisLabels, setShowStrikeAxisLabels] = useState(false);
-
   const [ceArrays, setCeArrays] = useState<StrikeData>({});
   const [peArrays, setPeArrays] = useState<StrikeData>({});
 
@@ -251,6 +259,9 @@ function Dashboard() {
   // Live India VIX and NIFTY Expected Range state
   const [expectedRange, setExpectedRange] = useState<ExpectedRangeData | null>(null);
   const [indiaVix, setIndiaVix] = useState<number | null>(null);
+
+  // Bottom left strike line chart axis labels visibility (Always On by default, toggleable)
+  const [showStrikeAxisLabels, setShowStrikeAxisLabels] = useState<boolean>(true);
 
   // Crossover Sound & Alert State
   const [isSoundAlertEnabled, setIsSoundAlertEnabled] = useState<boolean>(() => {
@@ -1195,7 +1206,7 @@ function Dashboard() {
                 borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `R2: ${currentSecondCE}`,
                   position: 'start' as const,
                   backgroundColor: '#991B1B',
@@ -1218,7 +1229,7 @@ function Dashboard() {
                 borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `R1: ${currentMaxCE}`,
                   position: 'start' as const,
                   backgroundColor: '#EF4444',
@@ -1241,7 +1252,7 @@ function Dashboard() {
                 borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `S1: ${currentMaxPE}`,
                   position: 'start' as const,
                   backgroundColor: '#10B981',
@@ -1264,7 +1275,7 @@ function Dashboard() {
                 borderWidth: 3,
                 borderDash: [10, 5],
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `S2: ${currentSecondPE}`,
                   position: 'start' as const,
                   backgroundColor: '#047857',
@@ -1287,7 +1298,7 @@ function Dashboard() {
                 borderColor: '#DC2626',
                 borderWidth: 2,
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `User R2: ${userPivotLevels.r2}`,
                   position: 'start' as const,
                   backgroundColor: '#DC2626',
@@ -1310,7 +1321,7 @@ function Dashboard() {
                 borderColor: '#EF4444',
                 borderWidth: 2,
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `User R1: ${userPivotLevels.r1}`,
                   position: 'start' as const,
                   backgroundColor: '#EF4444',
@@ -1333,7 +1344,7 @@ function Dashboard() {
                 borderColor: '#FBBF24',
                 borderWidth: 2,
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `Pivot: ${userPivotLevels.pivot}`,
                   position: 'center' as const,
                   backgroundColor: '#FBBF24',
@@ -1356,7 +1367,7 @@ function Dashboard() {
                 borderColor: '#10B981',
                 borderWidth: 2,
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `User S1: ${userPivotLevels.s1}`,
                   position: 'start' as const,
                   backgroundColor: '#10B981',
@@ -1379,7 +1390,7 @@ function Dashboard() {
                 borderColor: '#047857',
                 borderWidth: 2,
                 label: {
-                  display: showStrikeAxisLabels,
+                  display: true,
                   content: `User S2: ${userPivotLevels.s2}`,
                   position: 'start' as const,
                   backgroundColor: '#047857',
@@ -1401,11 +1412,8 @@ function Dashboard() {
           ticks: {
             display: showStrikeAxisLabels,
             color: '#9CA3AF',
-            maxTicksLimit: 12
+            maxTicksLimit: 10
           },
-          title: {
-            display: false,
-          }
         },
         y: {
           type: 'linear' as const,
@@ -1424,7 +1432,10 @@ function Dashboard() {
             }
           },
           title: {
-            display: false, // Don't write Difference title on left
+            display: showStrikeAxisLabels,
+            text: 'Difference',
+            color: '#10B981',
+            font: { size: 12, weight: 'bold' as const }
           }
         },
         y1: {
@@ -1447,7 +1458,10 @@ function Dashboard() {
             }
           },
           title: {
-            display: false, // Don't write Strike Price title on right
+            display: showStrikeAxisLabels,
+            text: `${selectedIndex} Value`,
+            color: '#FBBF24',
+            font: { size: 12, weight: 'bold' as const }
           }
         }
       },
@@ -2054,6 +2068,17 @@ function AppContent() {
             <div className="min-h-screen bg-gray-950">
               <NavBar />
               <AnalyticsPage />
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/paper-trading"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-slate-950">
+              <NavBar />
+              <PaperTradingPage />
             </div>
           </ProtectedRoute>
         }

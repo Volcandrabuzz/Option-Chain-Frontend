@@ -246,7 +246,28 @@ export const AllStrikesTable: React.FC<AllStrikesTableProps> = ({
         </div>
       </div>
 
-      {/* ================= Table Filtering & Search Bar ================= */}
+      {/* ================= Quick Graphs Banner ================= */}
+      <div className="bg-gradient-to-r from-blue-950/60 via-indigo-950/40 to-slate-900 border border-blue-500/30 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="text-xs text-slate-200">
+            <strong className="text-cyan-400">Want to see the quantitative graphs?</strong> Click any strike row in the table below or switch to{' '}
+            <button
+              onClick={() => onSelectStrikeForAnalysis(data.atm_strike || 24500, 'CE')}
+              className="text-cyan-400 underline font-bold hover:text-cyan-300"
+            >
+              ATM Strike ({data.atm_strike || 24500}) 7-Chart Deep-Dive
+            </button>
+          </span>
+        </div>
+        <button
+          onClick={() => onSelectStrikeForAnalysis(data.atm_strike || 24500, 'CE')}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-md shadow-blue-500/25 flex items-center gap-1.5 shrink-0"
+        >
+          <BarChart2 className="w-3.5 h-3.5" />
+          <span>Open Strike Deep-Dive Graphs</span>
+        </button>
+      </div>
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
         {/* Search Input */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">

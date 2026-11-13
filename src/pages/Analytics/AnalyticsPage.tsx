@@ -168,13 +168,14 @@ export const AnalyticsPage: React.FC = () => {
     }
   };
 
-  // Toggle strike in multi-strike comparison list
+  // Keep the multi-strike chart readable: 10 ITM + ATM + 10 OTM at most.
+  const MAX_COMPARISON_STRIKES = 21;
   const toggleComparisonStrike = (strike: number) => {
     if (comparisonStrikes.includes(strike)) {
       setComparisonStrikes(comparisonStrikes.filter((s) => s !== strike));
     } else {
-      if (comparisonStrikes.length >= 8) {
-        alert('You can compare up to 8 strikes simultaneously.');
+      if (comparisonStrikes.length >= MAX_COMPARISON_STRIKES) {
+        alert('You can compare up to 21 strikes (10 ITM + ATM + 10 OTM).');
         return;
       }
       setComparisonStrikes([...comparisonStrikes, strike]);
@@ -224,7 +225,12 @@ export const AnalyticsPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveLevel('L2')}
+              onClick={() => {
+                if (!selectedStrikeForAnalysis && chainData?.atm_strike) {
+                  setSelectedStrikeForAnalysis(chainData.atm_strike);
+                }
+                setActiveLevel('L2');
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all ${
                 activeLevel === 'L2'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
@@ -232,7 +238,7 @@ export const AnalyticsPage: React.FC = () => {
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>Level 2: Strike Deep-Dive</span>
+              <span>Level 2: Strike Deep-Dive (7 Graphs)</span>
               {selectedStrikeForAnalysis && (
                 <span className="text-[10px] bg-slate-950/80 px-1.5 py-0.2 rounded font-mono">
                   {selectedStrikeForAnalysis}
@@ -249,7 +255,7 @@ export const AnalyticsPage: React.FC = () => {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Level 3: Multi-Strike</span>
+              <span>Level 3: Multi-Strike (Compare Curves)</span>
               {comparisonStrikes.length > 0 && (
                 <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.2 rounded-full font-bold">
                   {comparisonStrikes.length}
@@ -303,12 +309,13 @@ export const AnalyticsPage: React.FC = () => {
         {activeLevel === 'L2' && (
           <IndividualStrikeAnalysis
             indexName={selectedIndex}
-            strike={selectedStrikeForAnalysis || chainData?.atm_strike || 24000}
+            strike={selectedStrikeForAnalysis || chainData?.atm_strike || 24500}
             side={selectedSide}
-            expiry={selectedExpiry}
+            expiry={selectedExpiry || chainData?.selected_expiry || '09-Nov-2026'}
             availableStrikes={availableStrikeNumbers}
             onSelectStrike={setSelectedStrikeForAnalysis}
             onSelectSide={setSelectedSide}
+            onClose={() => setActiveLevel('L1')}
           />
         )}
 
@@ -317,7 +324,12 @@ export const AnalyticsPage: React.FC = () => {
             indexName={selectedIndex}
             selectedStrikes={comparisonStrikes}
             onRemoveStrike={(s) => setComparisonStrikes(comparisonStrikes.filter((x) => x !== s))}
-            onAddStrike={(s) => setComparisonStrikes([...comparisonStrikes, s])}
+            onAddStrike={(s) => {
+              setComparisonStrikes((prev) =>
+                prev.includes(s) || prev.length >= MAX_COMPARISON_STRIKES ? prev : [...prev, s]
+              );
+            }}
+            onReplaceStrikes={(strikes) => setComparisonStrikes(strikes.slice(0, MAX_COMPARISON_STRIKES))}
             availableStrikes={availableStrikeNumbers}
             expiry={selectedExpiry}
             side={selectedSide}

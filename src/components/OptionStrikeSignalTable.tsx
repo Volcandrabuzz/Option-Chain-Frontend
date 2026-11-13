@@ -46,6 +46,7 @@ export interface OptionStrikeSignalTableProps {
   underlying?: number;
   r1?: number | null;
   s1?: number | null;
+  onRowClick?: (strike: number, side: 'CE' | 'PE') => void;
 }
 
 // ─── Formatters (Defensively guarded against null/undefined/NaN) ───────────────
@@ -100,6 +101,7 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
   underlying,
   r1: r1Raw,
   s1: s1Raw,
+  onRowClick,
 }) => {
   if (!strikeChain || !Array.isArray(strikeChain) || strikeChain.length === 0) {
     return null;
@@ -241,20 +243,130 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
         chg_oi: calcMinMax(peChgOi),
         ltp: calcMinMax(peLtp),
         volume: calcMinMax(peVol),
-        theta: calcMinMax(peTheta),
-        gamma: calcMinMax(peGamma),
-        delta: calcMinMax(peDelta),
+        theta: { min: null, max: null },
+        gamma: { min: null, max: null },
+        delta: { min: null, max: null },
       },
       ce: {
-        delta: calcMinMax(ceDelta),
-        gamma: calcMinMax(ceGamma),
-        theta: calcMinMax(ceTheta),
+        delta: { min: null, max: null },
+        gamma: { min: null, max: null },
+        theta: { min: null, max: null },
         volume: calcMinMax(ceVol),
         ltp: calcMinMax(ceLtp),
         chg_oi: calcMinMax(ceChgOi),
       },
     };
   }, [sortedChain]);
+
+  // ─── Max CE Delta Strike (from 3 strikes BELOW ATM) ─────────────────────────
+  // sortedChain is HIGH→LOW, so strikes below ATM are at indices AFTER the ATM row.
+  const maxCeDeltaStrike = useMemo(() => {
+    if (atmStrike === null || sortedChain.length === 0) return null;
+    const atmIdx = sortedChain.findIndex(r => r.strike === atmStrike);
+    if (atmIdx === -1 || atmIdx >= sortedChain.length - 1) return null;
+
+    let maxVal = -Infinity;
+    let maxStrike: number | null = null;
+    // 3 strikes below ATM = indices (atmIdx + 1)..(atmIdx + 3) in high→low sort
+    const endIdx = Math.min(sortedChain.length - 1, atmIdx + 3);
+    for (let i = atmIdx + 1; i <= endIdx; i++) {
+      const row = sortedChain[i];
+      const delta = row?.ce?.delta;
+      if (typeof delta === 'number' && !isNaN(delta) && delta > maxVal) {
+        maxVal = delta;
+        maxStrike = row.strike;
+      }
+    }
+    return maxStrike;
+  }, [sortedChain, atmStrike]);
+
+  // ─── Max |PE Delta| Strike (from 3 strikes ABOVE ATM) ──────────────────────
+  // sortedChain is HIGH→LOW, so strikes above ATM are at indices BEFORE the ATM row.
+  const maxPeDeltaStrike = useMemo(() => {
+    if (atmStrike === null || sortedChain.length === 0) return null;
+    const atmIdx = sortedChain.findIndex(r => r.strike === atmStrike);
+    if (atmIdx <= 0) return null;
+
+    let maxMag = -Infinity;
+    let maxStrike: number | null = null;
+    // 3 strikes above ATM = indices (atmIdx - 1)..(atmIdx - 3) in high→low sort
+    const startIdx = Math.max(0, atmIdx - 3);
+    for (let i = atmIdx - 1; i >= startIdx; i--) {
+      const row = sortedChain[i];
+      const delta = row?.pe?.delta;
+      if (typeof delta === 'number' && !isNaN(delta) && Math.abs(delta) > maxMag) {
+        maxMag = Math.abs(delta);
+        maxStrike = row.strike;
+      }
+    }
+    return maxStrike;
+  }, [sortedChain, atmStrike]);
+
+  // ─── Max PE Gamma Strike (Unique strike nearest to ATM if ties exist) ────────
+  const maxPeGammaStrike = useMemo(() => {
+    if (sortedChain.length === 0) return null;
+    let maxVal = -Infinity;
+    for (const row of sortedChain) {
+      const g = row.pe?.gamma;
+      if (typeof g === 'number' && !isNaN(g) && g > maxVal) {
+        maxVal = g;
+      }
+    }
+    if (maxVal <= 0 || maxVal === -Infinity) return null;
+
+    // Collect all strikes that share the highest gamma value
+    const candidateStrikes: number[] = [];
+    for (const row of sortedChain) {
+      const g = row.pe?.gamma;
+      if (typeof g === 'number' && !isNaN(g) && Math.abs(g - maxVal) < 0.000005) {
+        candidateStrikes.push(row.strike);
+      }
+    }
+
+    if (candidateStrikes.length === 0) return null;
+    if (candidateStrikes.length === 1) return candidateStrikes[0];
+
+    // If highest value found in many cells, choose the one closest to ATM
+    const targetAtm = atmStrike ?? underlying ?? candidateStrikes[0];
+    return candidateStrikes.reduce((closest, curr) => {
+      const currDist = Math.abs(curr - targetAtm);
+      const closestDist = Math.abs(closest - targetAtm);
+      return currDist < closestDist ? curr : closest;
+    }, candidateStrikes[0]);
+  }, [sortedChain, atmStrike, underlying]);
+
+  // ─── Max CE Gamma Strike (Unique strike nearest to ATM if ties exist) ────────
+  const maxCeGammaStrike = useMemo(() => {
+    if (sortedChain.length === 0) return null;
+    let maxVal = -Infinity;
+    for (const row of sortedChain) {
+      const g = row.ce?.gamma;
+      if (typeof g === 'number' && !isNaN(g) && g > maxVal) {
+        maxVal = g;
+      }
+    }
+    if (maxVal <= 0 || maxVal === -Infinity) return null;
+
+    // Collect all strikes that share the highest gamma value
+    const candidateStrikes: number[] = [];
+    for (const row of sortedChain) {
+      const g = row.ce?.gamma;
+      if (typeof g === 'number' && !isNaN(g) && Math.abs(g - maxVal) < 0.000005) {
+        candidateStrikes.push(row.strike);
+      }
+    }
+
+    if (candidateStrikes.length === 0) return null;
+    if (candidateStrikes.length === 1) return candidateStrikes[0];
+
+    // If highest value found in many cells, choose the one closest to ATM
+    const targetAtm = atmStrike ?? underlying ?? candidateStrikes[0];
+    return candidateStrikes.reduce((closest, curr) => {
+      const currDist = Math.abs(curr - targetAtm);
+      const closestDist = Math.abs(closest - targetAtm);
+      return currDist < closestDist ? curr : closest;
+    }, candidateStrikes[0]);
+  }, [sortedChain, atmStrike, underlying]);
 
   // Helper to determine cell background based on column min/max, row highlight, or default
   const getCellBg = (
@@ -485,14 +597,32 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
               const peChgCell = getCellBg(peChgOiVal, columnStats.pe.chg_oi, peDefaultBg, isS1Row, peRowHighlightBg);
               const peLtpCell = getCellBg(peLtpVal, columnStats.pe.ltp, peDefaultBg, isS1Row, peRowHighlightBg);
               const peVolCell = getCellBg(peVolVal, columnStats.pe.volume, peDefaultBg, isS1Row, peRowHighlightBg);
-              const peThetaCell = getCellBg(peThetaVal, columnStats.pe.theta, peDefaultBg, isS1Row, peRowHighlightBg);
-              const peGammaCell = getCellBg(peGammaVal, columnStats.pe.gamma, peDefaultBg, isS1Row, peRowHighlightBg);
-              // For Put Delta, pass useMagnitude=true so max is determined by absolute delta (|delta|)
-              const peDeltaCell = getCellBg(peDeltaVal, columnStats.pe.delta, peDefaultBg, isS1Row, peRowHighlightBg, true);
+              const peThetaCell = { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
 
-              const ceDeltaCell = getCellBg(ceDeltaVal, columnStats.ce.delta, ceDefaultBg, isR1Row, ceRowHighlightBg);
-              const ceGammaCell = getCellBg(ceGammaVal, columnStats.ce.gamma, ceDefaultBg, isR1Row, ceRowHighlightBg);
-              const ceThetaCell = getCellBg(ceThetaVal, columnStats.ce.theta, ceDefaultBg, isR1Row, ceRowHighlightBg);
+              // PE Gamma: highlight green only if this strike is max PE Gamma (closest to ATM if ties)
+              const peGammaIsMax = maxPeGammaStrike !== null && row.strike === maxPeGammaStrike;
+              const peGammaCell = peGammaIsMax
+                ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max PE Gamma (nearest to ATM)` }
+                : { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
+
+              // PE Delta: highlight green only if this strike has max |delta| among 3 strikes above ATM
+              const peDeltaIsMax = maxPeDeltaStrike !== null && row.strike === maxPeDeltaStrike;
+              const peDeltaCell = peDeltaIsMax
+                ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max |PE Delta| in 3 strikes above ATM` }
+                : { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
+
+              // CE Delta: highlight green only if this strike has max CE delta among 3 strikes below ATM
+              const ceDeltaIsMax = maxCeDeltaStrike !== null && row.strike === maxCeDeltaStrike;
+              const ceDeltaCell = ceDeltaIsMax
+                ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max CE Delta in 3 strikes below ATM` }
+                : { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
+
+              // CE Gamma: highlight green only if this strike is max CE Gamma (closest to ATM if ties)
+              const ceGammaIsMax = maxCeGammaStrike !== null && row.strike === maxCeGammaStrike;
+              const ceGammaCell = ceGammaIsMax
+                ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max CE Gamma (nearest to ATM)` }
+                : { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
+              const ceThetaCell = { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
               const ceVolCell = getCellBg(ceVolVal, columnStats.ce.volume, ceDefaultBg, isR1Row, ceRowHighlightBg);
               const ceLtpCell = getCellBg(ceLtpVal, columnStats.ce.ltp, ceDefaultBg, isR1Row, ceRowHighlightBg);
               const ceChgCell = getCellBg(ceChgOiVal, columnStats.ce.chg_oi, ceDefaultBg, isR1Row, ceRowHighlightBg);
@@ -531,63 +661,76 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                 ? 'bg-blue-950/60 text-yellow-300 font-bold'
                 : 'bg-gray-900 text-yellow-300/90 font-bold';
 
+              // Click handler helpers
+              const peClick = onRowClick ? () => onRowClick(row.strike, 'PE') : undefined;
+              const ceClick = onRowClick ? () => onRowClick(row.strike, 'CE') : undefined;
+              const peClickClass = onRowClick ? 'cursor-pointer hover:brightness-125' : '';
+              const ceClickClass = onRowClick ? 'cursor-pointer hover:brightness-125' : '';
+
               return (
                 <tr
                   key={row.strike}
                   className={`transition-colors ${isAtm ? 'font-semibold' : ''}`}
                 >
-                  {/* ── PE Side (5 Columns) ── */}
+                  {/* ── PE Side (5 Columns) — click to open PE VWAP chart ── */}
                   {/* 1. PE CHG OI (Leftmost column) */}
                   <td
-                    className={`py-2 px-2.5 text-right font-semibold transition-colors ${peChgCell.bgClass} ${peLeftmostBorder}`}
-                    title={peChgCell.title}
+                    className={`py-2 px-2.5 text-right font-semibold transition-colors ${peClickClass} ${peChgCell.bgClass} ${peLeftmostBorder}`}
+                    title={peChgCell.title ?? (onRowClick ? 'Click to view PE VWAP chart' : undefined)}
+                    onClick={peClick}
                   >
                     <span className={peChgOi.color}>{peChgOi.text}</span>
                   </td>
 
                   {/* 2. PE LTP */}
                   <td
-                    className={`py-2 px-2.5 text-right font-semibold text-white transition-colors ${peLtpCell.bgClass} ${peBorderTopBottom}`}
-                    title={peLtpCell.title}
+                    className={`py-2 px-2.5 text-right font-semibold text-white transition-colors ${peClickClass} ${peLtpCell.bgClass} ${peBorderTopBottom}`}
+                    title={peLtpCell.title ?? (onRowClick ? 'Click to view PE VWAP chart' : undefined)}
+                    onClick={peClick}
                   >
                     {peLtp}
                   </td>
 
                   {/* 3. PE VOLUME */}
                   <td
-                    className={`py-2 px-2.5 text-right font-medium text-gray-200 transition-colors ${peVolCell.bgClass} ${peBorderTopBottom}`}
-                    title={peVolCell.title}
+                    className={`py-2 px-2.5 text-right font-medium text-gray-200 transition-colors ${peClickClass} ${peVolCell.bgClass} ${peBorderTopBottom}`}
+                    title={peVolCell.title ?? (onRowClick ? 'Click to view PE VWAP chart' : undefined)}
+                    onClick={peClick}
                   >
                     {peVolume}
                   </td>
 
                   {/* 4. PE THETA */}
                   <td
-                    className={`py-2 px-2.5 text-right font-medium text-gray-300 transition-colors ${peThetaCell.bgClass} ${peBorderTopBottom}`}
-                    title={peThetaCell.title}
+                    className={`py-2 px-2.5 text-right font-medium text-gray-300 transition-colors ${peClickClass} ${peThetaCell.bgClass} ${peBorderTopBottom}`}
+                    onClick={peClick}
                   >
                     {peTheta}
                   </td>
 
                   {/* 5. PE GAMMA */}
                   <td
-                    className={`py-2 px-2.5 text-right font-medium text-gray-300 transition-colors ${peGammaCell.bgClass} ${peBorderTopBottom}`}
-                    title={peGammaCell.title}
+                    className={`py-2 px-2.5 text-right font-medium text-gray-300 transition-colors ${peClickClass} ${peGammaCell.bgClass} ${peBorderTopBottom}`}
+                    title={peGammaCell.title ?? (onRowClick ? 'Click to view PE VWAP chart' : undefined)}
+                    onClick={peClick}
                   >
                     {peGamma}
                   </td>
 
                   {/* 6. PE DELTA (Adjacent to Strike) */}
                   <td
-                    className={`py-2 px-2.5 text-right font-medium text-gray-200 border-r-2 border-gray-700 transition-colors ${peDeltaCell.bgClass} ${peBorderTopBottom}`}
-                    title={peDeltaCell.title}
+                    className={`py-2 px-2.5 text-right font-medium text-gray-200 border-r-2 border-gray-700 transition-colors ${peClickClass} ${peDeltaCell.bgClass} ${peBorderTopBottom}`}
+                    title={peDeltaCell.title ?? (onRowClick ? 'Click to view PE VWAP chart' : undefined)}
+                    onClick={peClick}
                   >
                     {peDelta}
                   </td>
 
                   {/* ── Center Strike Price ── */}
                   <td
-                    className={`py-2 px-3 text-center transition-colors ${strikeBgClass} ${strikeBorderClass}`}
+                    className={`py-2 px-3 text-center transition-colors ${strikeBgClass} ${strikeBorderClass} ${onRowClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+                    title={onRowClick ? `Click to view VWAP & Candlestick chart for strike ${row.strike}` : undefined}
+                    onClick={() => onRowClick?.(row.strike, isCeItm ? 'CE' : isPeItm ? 'PE' : 'CE')}
                   >
                     <div className="flex items-center justify-center gap-1.5 flex-wrap">
                       <span className="text-sm sm:text-base font-extrabold">{row.strike.toLocaleString('en-IN')}</span>
@@ -648,51 +791,56 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                     </div>
                   </td>
 
-                  {/* ── CE Side (6 Columns) ── */}
+                  {/* ── CE Side (6 Columns) — click to open CE VWAP chart ── */}
                   {/* 1. CE DELTA (Adjacent to Strike) */}
                   <td
-                    className={`py-2 px-2.5 text-left font-medium text-gray-200 border-l-2 border-gray-700 transition-colors ${ceDeltaCell.bgClass} ${ceBorderTopBottom}`}
-                    title={ceDeltaCell.title}
+                    className={`py-2 px-2.5 text-left font-medium text-gray-200 border-l-2 border-gray-700 transition-colors ${ceClickClass} ${ceDeltaCell.bgClass} ${ceBorderTopBottom}`}
+                    title={ceDeltaCell.title ?? (onRowClick ? 'Click to view CE VWAP chart' : undefined)}
+                    onClick={ceClick}
                   >
                     {ceDelta}
                   </td>
 
                   {/* 2. CE GAMMA */}
                   <td
-                    className={`py-2 px-2.5 text-left font-medium text-gray-300 transition-colors ${ceGammaCell.bgClass} ${ceBorderTopBottom}`}
-                    title={ceGammaCell.title}
+                    className={`py-2 px-2.5 text-left font-medium text-gray-300 transition-colors ${ceClickClass} ${ceGammaCell.bgClass} ${ceBorderTopBottom}`}
+                    title={ceGammaCell.title ?? (onRowClick ? 'Click to view CE VWAP chart' : undefined)}
+                    onClick={ceClick}
                   >
                     {ceGamma}
                   </td>
 
                   {/* 3. CE THETA */}
                   <td
-                    className={`py-2 px-2.5 text-left font-medium text-gray-300 transition-colors ${ceThetaCell.bgClass} ${ceBorderTopBottom}`}
-                    title={ceThetaCell.title}
+                    className={`py-2 px-2.5 text-left font-medium text-gray-300 transition-colors ${ceClickClass} ${ceThetaCell.bgClass} ${ceBorderTopBottom}`}
+                    onClick={ceClick}
                   >
                     {ceTheta}
                   </td>
 
                   {/* 4. CE VOLUME */}
                   <td
-                    className={`py-2 px-2.5 text-left font-medium text-gray-200 transition-colors ${ceVolCell.bgClass} ${ceBorderTopBottom}`}
-                    title={ceVolCell.title}
+                    className={`py-2 px-2.5 text-left font-medium text-gray-200 transition-colors ${ceClickClass} ${ceVolCell.bgClass} ${ceBorderTopBottom}`}
+                    title={ceVolCell.title ?? (onRowClick ? 'Click to view CE VWAP chart' : undefined)}
+                    onClick={ceClick}
                   >
                     {ceVolume}
                   </td>
 
                   {/* 5. CE LTP */}
                   <td
-                    className={`py-2 px-2.5 text-left font-semibold text-white transition-colors ${ceLtpCell.bgClass} ${ceBorderTopBottom}`}
-                    title={ceLtpCell.title}
+                    className={`py-2 px-2.5 text-left font-semibold text-white transition-colors ${ceClickClass} ${ceLtpCell.bgClass} ${ceBorderTopBottom}`}
+                    title={ceLtpCell.title ?? (onRowClick ? 'Click to view CE VWAP chart' : undefined)}
+                    onClick={ceClick}
                   >
                     {ceLtp}
                   </td>
 
                   {/* 6. CE CHG OI (Rightmost column) */}
                   <td
-                    className={`py-2 px-2.5 text-left font-semibold transition-colors ${ceChgCell.bgClass} ${ceRightmostBorder}`}
-                    title={ceChgCell.title}
+                    className={`py-2 px-2.5 text-left font-semibold transition-colors ${ceClickClass} ${ceChgCell.bgClass} ${ceRightmostBorder}`}
+                    title={ceChgCell.title ?? (onRowClick ? 'Click to view CE VWAP chart' : undefined)}
+                    onClick={ceClick}
                   >
                     <span className={ceChgOi.color}>{ceChgOi.text}</span>
                   </td>

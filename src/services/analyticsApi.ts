@@ -161,7 +161,8 @@ export const fetchMultiStrike = async (
   strikes: number[],
   side: 'CE' | 'PE',
   expiry?: string,
-  timeframe: string = '5m'
+  timeframe: string = '5m',
+  signal?: AbortSignal
 ): Promise<MultiStrikeResponse> => {
   const url = new URL('/api/analytics/multi-strike', window.location.origin);
   url.searchParams.set('index', index);
@@ -170,7 +171,7 @@ export const fetchMultiStrike = async (
   if (expiry) url.searchParams.set('expiry', expiry);
   url.searchParams.set('timeframe', timeframe);
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { signal });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || `Multi-strike fetch failed with status ${res.status}`);

@@ -109,7 +109,14 @@ export const IndividualStrikeAnalysis: React.FC<IndividualStrikeAnalysisProps> =
     return () => clearInterval(interval);
   }, [indexName, strike, side, expiry, timeframe]);
 
-  const series = data?.series || [];
+  const series = React.useMemo(() => {
+    const raw = data?.series || [];
+    return [...raw].sort((a, b) => {
+      const ta = new Date(a.t).getTime() || 0;
+      const tb = new Date(b.t).getTime() || 0;
+      return ta - tb;
+    });
+  }, [data?.series]);
   const latestPoint = series.length > 0 ? series[series.length - 1] : null;
 
   const resetAllZooms = () => {
