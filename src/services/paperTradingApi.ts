@@ -241,9 +241,11 @@ export interface EmaCandlesResponse {
     ema_5m_valid: boolean;
     status_5m: string;
     direction_5m: string;
+    ema_5m_candles_count?: number;
     ema_5m_slope?: number;
     ema_1m: number | null;
     ema_1m_ready: boolean;
+    ema_1m_candles_count?: number;
     status_1m: string;
     direction_1m: string;
     ema_1m_slope?: number;

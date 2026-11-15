@@ -895,24 +895,30 @@ function Dashboard() {
   };
 
   const isCEChecked = (strike: number) => {
-    return strike === currentMaxCE || userSelectedCE.has(strike);
+    return strike === currentMaxCE || strike === currentSecondCE || userSelectedCE.has(strike);
   };
 
   const isPEChecked = (strike: number) => {
-    return strike === currentMaxPE || userSelectedPE.has(strike);
+    return strike === currentMaxPE || strike === currentSecondPE || userSelectedPE.has(strike);
   };
 
-  const getSelectedCEStrikes = () => {
-    const selected = [];
+  const getSelectedCEStrikes = (): number[] => {
+    const selected: number[] = [];
     if (currentMaxCE) selected.push(currentMaxCE);
-    userSelectedCE.forEach(s => selected.push(s));
+    if (currentSecondCE && currentSecondCE !== currentMaxCE) selected.push(currentSecondCE);
+    userSelectedCE.forEach(s => {
+      if (s !== currentMaxCE && s !== currentSecondCE) selected.push(s);
+    });
     return selected;
   };
 
-  const getSelectedPEStrikes = () => {
-    const selected = [];
+  const getSelectedPEStrikes = (): number[] => {
+    const selected: number[] = [];
     if (currentMaxPE) selected.push(currentMaxPE);
-    userSelectedPE.forEach(s => selected.push(s));
+    if (currentSecondPE && currentSecondPE !== currentMaxPE) selected.push(currentSecondPE);
+    userSelectedPE.forEach(s => {
+      if (s !== currentMaxPE && s !== currentSecondPE) selected.push(s);
+    });
     return selected;
   };
 
@@ -1037,7 +1043,7 @@ function Dashboard() {
         const isMax = strike === currentMaxCE;
         const isSecondMax = strike === currentSecondCE;
         datasets.push({
-          label: `CE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
+          label: `CE ${strike}${isMax ? ' (R1)' : isSecondMax ? ' (R2)' : ''}`,
           data: alignArray(ceArrays[strike]),
           borderColor: CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length],
           backgroundColor: `${CE_STRIKE_COLORS[ceColorIndex % CE_STRIKE_COLORS.length]}20`,
@@ -1059,7 +1065,7 @@ function Dashboard() {
         const isMax = strike === currentMaxPE;
         const isSecondMax = strike === currentSecondPE;
         datasets.push({
-          label: `PE ${strike}${isMax ? ' ⭐' : ''}${isSecondMax ? ' ⭐⭐' : ''}`,
+          label: `PE ${strike}${isMax ? ' (S1)' : isSecondMax ? ' (S2)' : ''}`,
           data: alignArray(peArrays[strike]),
           borderColor: PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length],
           backgroundColor: `${PE_STRIKE_COLORS[peColorIndex % PE_STRIKE_COLORS.length]}20`,
@@ -1589,7 +1595,7 @@ function Dashboard() {
 
                 {showCEDropdown && (
                   <div className="absolute right-0 top-full mt-1 bg-gray-700 rounded-lg shadow-xl border border-gray-600 z-50 max-h-60 overflow-y-auto">
-                    {top10CEStrikes.filter(s => s !== currentMaxCE && !userSelectedCE.has(s)).map((strike) => (
+                    {top10CEStrikes.filter(s => s !== currentMaxCE && s !== currentSecondCE && !userSelectedCE.has(s)).map((strike) => (
                       <button
                         key={strike}
                         onClick={() => handleCEStrikeSelect(strike)}
@@ -1607,19 +1613,32 @@ function Dashboard() {
               {getSelectedCEStrikes().map((strike) => {
                 const greeks = strikeGreeks[`CE_${strike}`] || { iv: 0, gamma: 0, delta: 0, theta: 0, vega: 0 };
                 const isMax = strike === currentMaxCE;
+                const isSecondMax = strike === currentSecondCE;
 
                 return (
                   <div
                     key={`ce-${strike}`}
-                    className={`p-2.5 rounded-lg border-2 ${isMax
+                    className={`p-2.5 rounded-lg border-2 ${
+                      isMax
                         ? 'bg-blue-600 border-blue-400'
+                        : isSecondMax
+                        ? 'bg-blue-900/60 border-blue-400/80'
                         : 'bg-gray-700 border-gray-600'
-                      }`}
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-base font-bold">{strike}</span>
-                      {isMax && <span className="text-yellow-300 text-sm">⭐</span>}
-                      {!isMax && (
+                      {isMax && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-orange-600 text-white border border-orange-400">
+                          R1
+                        </span>
+                      )}
+                      {isSecondMax && !isMax && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-600 text-white border border-amber-400">
+                          R2
+                        </span>
+                      )}
+                      {!isMax && !isSecondMax && (
                         <button
                           onClick={() => handleCEStrikeSelect(strike)}
                           className="text-red-400 hover:text-red-300 text-xs"
@@ -1674,7 +1693,7 @@ function Dashboard() {
 
                 {showPEDropdown && (
                   <div className="absolute right-0 top-full mt-1 bg-gray-700 rounded-lg shadow-xl border border-gray-600 z-50 max-h-60 overflow-y-auto">
-                    {top10PEStrikes.filter(s => s !== currentMaxPE && !userSelectedPE.has(s)).map((strike) => (
+                    {top10PEStrikes.filter(s => s !== currentMaxPE && s !== currentSecondPE && !userSelectedPE.has(s)).map((strike) => (
                       <button
                         key={strike}
                         onClick={() => handlePEStrikeSelect(strike)}
@@ -1692,19 +1711,32 @@ function Dashboard() {
               {getSelectedPEStrikes().map((strike) => {
                 const greeks = strikeGreeks[`PE_${strike}`] || { iv: 0, gamma: 0, delta: 0, theta: 0, vega: 0 };
                 const isMax = strike === currentMaxPE;
+                const isSecondMax = strike === currentSecondPE;
 
                 return (
                   <div
                     key={`pe-${strike}`}
-                    className={`p-2.5 rounded-lg border-2 ${isMax
+                    className={`p-2.5 rounded-lg border-2 ${
+                      isMax
                         ? 'bg-orange-600 border-orange-400'
+                        : isSecondMax
+                        ? 'bg-orange-900/60 border-orange-400/80'
                         : 'bg-gray-700 border-gray-600'
-                      }`}
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-base font-bold">{strike}</span>
-                      {isMax && <span className="text-yellow-300 text-sm">⭐</span>}
-                      {!isMax && (
+                      {isMax && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-blue-600 text-white border border-blue-400">
+                          S1
+                        </span>
+                      )}
+                      {isSecondMax && !isMax && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-cyan-600 text-white border border-cyan-400">
+                          S2
+                        </span>
+                      )}
+                      {!isMax && !isSecondMax && (
                         <button
                           onClick={() => handlePEStrikeSelect(strike)}
                           className="text-red-400 hover:text-red-300 text-xs"
@@ -1750,10 +1782,12 @@ function Dashboard() {
 
         {/* Options Strike Signal Table */}
         {strikeChain.length > 0 && (() => {
-          // Determine R1/S1: R1 must be ABOVE ATM (resistance), S1 must be BELOW ATM (support)
+          // Determine R1/S1 and R2/S2: R1/R2 must be ABOVE ATM (resistance), S1/S2 must be BELOW ATM (support)
           // User pivot levels take priority; auto-detection enforces correct side
           let autoR1: number | null | undefined = currentMaxCE;
+          let autoR2: number | null | undefined = currentSecondCE;
           let autoS1: number | null | undefined = currentMaxPE;
+          let autoS2: number | null | undefined = currentSecondPE;
           // If both auto values exist and they're on the wrong side, swap them
           if (autoR1 != null && autoS1 != null && indexValue > 0) {
             if (autoR1 < autoS1) {
@@ -1770,14 +1804,18 @@ function Dashboard() {
             autoS1 = null;
           }
           const r1Val = userPivotLevels.r1 || autoR1 || undefined;
+          const r2Val = userPivotLevels.r2 || autoR2 || undefined;
           const s1Val = userPivotLevels.s1 || autoS1 || undefined;
+          const s2Val = userPivotLevels.s2 || autoS2 || undefined;
           return (
             <OptionStrikeSignalTable
               strikeChain={strikeChain}
               selectedIndex={selectedIndex}
               underlying={indexValue}
               r1={r1Val}
+              r2={r2Val}
               s1={s1Val}
+              s2={s2Val}
               onRowClick={(strike, side) => setVwapModalSelected({ strike, side })}
             />
           );

@@ -85,7 +85,6 @@ export const PaperTradingPage: React.FC = () => {
   const [candles5m, setCandles5m] = useState<EmaCandle[]>([]);
   const [candles1m, setCandles1m] = useState<EmaCandle[]>([]);
   const [emaStatusData, setEmaStatusData] = useState<any>(null);
-  const [emaTimeframe, setEmaTimeframe] = useState<'1m' | '5m'>('5m');
   const [auditTab, setAuditTab] = useState<'trades' | 'signals'>('trades');
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -127,7 +126,7 @@ export const PaperTradingPage: React.FC = () => {
         fetchPaperTradingConfig(),
         fetchAllIndicesStatus(),
         fetchSignalAudit(selectedIndex, 10),
-        fetchEmaCandles(selectedIndex, emaTimeframe)
+        fetchEmaCandles(selectedIndex, '5m')
       ]);
       if (resStatus.status === 'fulfilled' && resStatus.value.success) {
         setStatus(resStatus.value.status);
@@ -157,7 +156,7 @@ export const PaperTradingPage: React.FC = () => {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, [selectedIndex, emaTimeframe]);
+  }, [selectedIndex]);
 
   useEffect(() => {
     loadInitialData(false);
@@ -810,20 +809,9 @@ export const PaperTradingPage: React.FC = () => {
               }`}>
                 1m State: {emaStatusData?.status_1m || (status?.ema_1m ? 'READY' : 'WARMING_UP')}
               </span>
-              <div className="flex rounded-lg overflow-hidden border border-slate-700 bg-slate-950">
-                <button
-                  onClick={() => setEmaTimeframe('5m')}
-                  className={`px-2.5 py-1 text-xs font-bold ${emaTimeframe === '5m' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                >
-                  5m Candles
-                </button>
-                <button
-                  onClick={() => setEmaTimeframe('1m')}
-                  className={`px-2.5 py-1 text-xs font-bold ${emaTimeframe === '1m' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                >
-                  1m Candles
-                </button>
-              </div>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded border border-slate-700 bg-slate-950 text-slate-300">
+                5m Interval Base
+              </span>
             </div>
           </div>
 
@@ -865,9 +853,13 @@ export const PaperTradingPage: React.FC = () => {
             </div>
 
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-              <span className="text-[11px] text-slate-400 block font-semibold">Completed Candles</span>
-              <span className="text-base font-black text-white">{emaCandles.length}</span>
-              <span className="text-[10px] text-slate-500 block">In memory window</span>
+              <span className="text-[11px] text-slate-400 block font-semibold">Validated Samples</span>
+              <span className="text-base font-black text-white">
+                {emaStatusData?.ema_5m_candles_count ?? emaCandles.length}
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                5m closed samples
+              </span>
             </div>
           </div>
 
@@ -876,7 +868,7 @@ export const PaperTradingPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-slate-300">
-                  {selectedIndex} Dual EMA Stream Visualizer ({emaTimeframe.toUpperCase()} Candle Base)
+                  {selectedIndex} Dual EMA Stream Visualizer (5m Interval Base)
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span> Underlying Close
@@ -889,8 +881,8 @@ export const PaperTradingPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-emerald-400">
-                  Zero-Lookahead: Completed Candles Only
+                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-400">
+                  Live Provisional EMA Active
                 </span>
               </div>
             </div>
@@ -917,26 +909,23 @@ export const PaperTradingPage: React.FC = () => {
                       },
                       {
                         label: '5m EMA(9)',
-                        data: emaCandles.map((c) => {
-                          if (emaTimeframe === '5m') return c.ema_9;
-                          // In 1m view: Step-align the 5m EMA using the latest completed 5m candle
-                          const cTime = new Date(c.time || c.timestamp).getTime();
-                          const prior5m = candles5m
-                            .filter((c5) => new Date(c5.time || c5.timestamp).getTime() <= cTime && c5.ema_9 !== null)
-                            .slice(-1)[0];
-                          return prior5m ? prior5m.ema_9 : (emaStatusData?.ema_5m ?? null);
-                        }),
+                        data: emaCandles.map((c) => c.ema_9),
                         borderColor: '#06b6d4',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         pointRadius: 0,
-                        stepped: emaTimeframe === '1m' ? 'before' : false,
-                        tension: emaTimeframe === '5m' ? 0.2 : 0,
+                        tension: 0.2,
                         spanGaps: true,
                       },
                       {
                         label: '1m EMA(9)',
-                        data: (emaTimeframe === '1m' ? emaCandles : candles1m).map((c) => c.ema_9),
+                        data: emaCandles.map((c) => {
+                          const cTime = new Date(c.time || c.timestamp).getTime();
+                          const matching1m = candles1m
+                            .filter((c1) => new Date(c1.time || c1.timestamp).getTime() <= cTime && c1.ema_9 !== null)
+                            .slice(-1)[0];
+                          return matching1m ? matching1m.ema_9 : null;
+                        }),
                         borderColor: '#f59e0b',
                         backgroundColor: 'transparent',
                         borderWidth: 1.5,
@@ -966,7 +955,10 @@ export const PaperTradingPage: React.FC = () => {
                         callbacks: {
                           label: (context) => {
                             const val = context.parsed.y;
-                            return ` ${context.dataset.label}: ₹${val !== null && val !== undefined ? Number(val).toFixed(2) : 'N/A'}`;
+                            const isLast = context.dataIndex === emaCandles.length - 1;
+                            const isDeveloping = isLast && emaCandles[isLast]?.is_completed === false;
+                            const suffix = isDeveloping && context.dataset.label?.includes('EMA') ? ' (Provisional)' : '';
+                            return ` ${context.dataset.label}: ₹${val !== null && val !== undefined ? Number(val).toFixed(2) : 'N/A'}${suffix}`;
                           },
                         },
                       },

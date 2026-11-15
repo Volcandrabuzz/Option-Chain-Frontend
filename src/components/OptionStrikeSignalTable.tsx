@@ -45,7 +45,9 @@ export interface OptionStrikeSignalTableProps {
   selectedIndex?: string;
   underlying?: number;
   r1?: number | null;
+  r2?: number | null;
   s1?: number | null;
+  s2?: number | null;
   onRowClick?: (strike: number, side: 'CE' | 'PE') => void;
 }
 
@@ -100,7 +102,9 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
   selectedIndex = 'NIFTY',
   underlying,
   r1: r1Raw,
+  r2: r2Raw,
   s1: s1Raw,
+  s2: s2Raw,
   onRowClick,
 }) => {
   if (!strikeChain || !Array.isArray(strikeChain) || strikeChain.length === 0) {
@@ -112,7 +116,9 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
   // S1 = Support    → LOWER  strike (below ATM, appears at bottom of chain)
   // If both values exist and are inverted (r1 < s1), swap them.
   let r1 = r1Raw;
+  let r2 = r2Raw;
   let s1 = s1Raw;
+  let s2 = s2Raw;
   if (
     r1 != null && s1 != null &&
     typeof r1 === 'number' && typeof s1 === 'number' &&
@@ -179,6 +185,40 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
     }
     return nearest;
   }, [sortedChain, s1]);
+
+  // Target R2 Strike in chain (exact or closest)
+  const targetR2Strike = useMemo(() => {
+    if (r2 === null || r2 === undefined || isNaN(r2)) return null;
+    const exact = sortedChain.find(r => r.strike === r2);
+    if (exact) return exact.strike;
+    let nearest = sortedChain[0]?.strike ?? null;
+    let minDiff = nearest !== null ? Math.abs(nearest - r2) : Infinity;
+    for (const r of sortedChain) {
+      const diff = Math.abs(r.strike - r2);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = r.strike;
+      }
+    }
+    return nearest;
+  }, [sortedChain, r2]);
+
+  // Target S2 Strike in chain (exact or closest)
+  const targetS2Strike = useMemo(() => {
+    if (s2 === null || s2 === undefined || isNaN(s2)) return null;
+    const exact = sortedChain.find(r => r.strike === s2);
+    if (exact) return exact.strike;
+    let nearest = sortedChain[0]?.strike ?? null;
+    let minDiff = nearest !== null ? Math.abs(nearest - s2) : Infinity;
+    for (const r of sortedChain) {
+      const diff = Math.abs(r.strike - s2);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = r.strike;
+      }
+    }
+    return nearest;
+  }, [sortedChain, s2]);
 
   // Market crossing conditions:
   // - Resistance blinks till the market crosses that resistance (underlying rises to or above R1)
@@ -469,6 +509,12 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
               R1 CE: {targetR1Strike} {hasCrossedResistance ? '(Crossed)' : ''}
             </span>
           )}
+          {targetR2Strike !== null && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border bg-amber-500/15 text-amber-300 border-amber-500/40">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              R2 CE: {targetR2Strike}
+            </span>
+          )}
           {targetS1Strike !== null && (
             <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border ${
               isSupportBlinking 
@@ -477,6 +523,12 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
             }`}>
               <span className={`h-2 w-2 rounded-full bg-blue-500 ${isSupportBlinking ? 'animate-ping' : ''}`} />
               S1 PE: {targetS1Strike} {hasCrossedSupport ? '(Crossed)' : ''}
+            </span>
+          )}
+          {targetS2Strike !== null && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border bg-cyan-500/15 text-cyan-300 border-cyan-500/40">
+              <span className="h-2 w-2 rounded-full bg-cyan-400" />
+              S2 PE: {targetS2Strike}
             </span>
           )}
 
@@ -537,9 +589,14 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
 
               const isAtm = (atmStrike !== null && row.strike === atmStrike) || !!row.is_atm;
 
-              // Row identification for Resistance (R1) and Support (S1)
+              // Row identification for Resistance (R1, R2) and Support (S1, S2)
               const isR1Row = targetR1Strike !== null && row.strike === targetR1Strike;
+              const isR2Row = targetR2Strike !== null && row.strike === targetR2Strike && !isR1Row;
               const isS1Row = targetS1Strike !== null && row.strike === targetS1Strike;
+              const isS2Row = targetS2Strike !== null && row.strike === targetS2Strike && !isS1Row;
+
+              const isPeHighlighted = isS1Row || isS2Row;
+              const isCeHighlighted = isR1Row || isR2Row;
 
               // ITM vs OTM determinations
               // PUT (PE): In The Money when Strike > ATM (market is below strike)
@@ -561,8 +618,8 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                 ? 'bg-gray-950 text-gray-200'
                 : 'bg-slate-700/40 text-slate-100';
 
-              const peRowHighlightBg = 'bg-blue-950/40 text-blue-200';
-              const ceRowHighlightBg = 'bg-orange-950/40 text-orange-200';
+              const peRowHighlightBg = isS1Row ? 'bg-blue-950/40 text-blue-200' : 'bg-cyan-950/30 text-cyan-200';
+              const ceRowHighlightBg = isR1Row ? 'bg-orange-950/40 text-orange-200' : 'bg-amber-950/30 text-amber-200';
 
               // Extract values for PE and CE columns
               const peChgOiVal = row.pe?.change_oi ?? row.pe?.chg_oi;
@@ -594,62 +651,81 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
               const ceDelta = fmtDelta(ceDeltaVal);
 
               // ─── Column Min / Max Evaluation for Cells ───
-              const peChgCell = getCellBg(peChgOiVal, columnStats.pe.chg_oi, peDefaultBg, isS1Row, peRowHighlightBg);
-              const peLtpCell = getCellBg(peLtpVal, columnStats.pe.ltp, peDefaultBg, isS1Row, peRowHighlightBg);
-              const peVolCell = getCellBg(peVolVal, columnStats.pe.volume, peDefaultBg, isS1Row, peRowHighlightBg);
-              const peThetaCell = { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
+              const peChgCell = getCellBg(peChgOiVal, columnStats.pe.chg_oi, peDefaultBg, isPeHighlighted, peRowHighlightBg);
+              const peLtpCell = getCellBg(peLtpVal, columnStats.pe.ltp, peDefaultBg, isPeHighlighted, peRowHighlightBg);
+              const peVolCell = getCellBg(peVolVal, columnStats.pe.volume, peDefaultBg, isPeHighlighted, peRowHighlightBg);
+              const peThetaCell = { bgClass: isPeHighlighted ? peRowHighlightBg : peDefaultBg };
 
               // PE Gamma: highlight green only if this strike is max PE Gamma (closest to ATM if ties)
               const peGammaIsMax = maxPeGammaStrike !== null && row.strike === maxPeGammaStrike;
               const peGammaCell = peGammaIsMax
                 ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max PE Gamma (nearest to ATM)` }
-                : { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
+                : { bgClass: isPeHighlighted ? peRowHighlightBg : peDefaultBg };
 
               // PE Delta: highlight green only if this strike has max |delta| among 3 strikes above ATM
               const peDeltaIsMax = maxPeDeltaStrike !== null && row.strike === maxPeDeltaStrike;
               const peDeltaCell = peDeltaIsMax
                 ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max |PE Delta| in 3 strikes above ATM` }
-                : { bgClass: isS1Row ? peRowHighlightBg : peDefaultBg };
+                : { bgClass: isPeHighlighted ? peRowHighlightBg : peDefaultBg };
 
               // CE Delta: highlight green only if this strike has max CE delta among 3 strikes below ATM
               const ceDeltaIsMax = maxCeDeltaStrike !== null && row.strike === maxCeDeltaStrike;
               const ceDeltaCell = ceDeltaIsMax
                 ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max CE Delta in 3 strikes below ATM` }
-                : { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
+                : { bgClass: isCeHighlighted ? ceRowHighlightBg : ceDefaultBg };
 
               // CE Gamma: highlight green only if this strike is max CE Gamma (closest to ATM if ties)
               const ceGammaIsMax = maxCeGammaStrike !== null && row.strike === maxCeGammaStrike;
               const ceGammaCell = ceGammaIsMax
                 ? { bgClass: 'bg-lime-500/35 text-lime-100 font-bold shadow-inner border border-lime-400/40', title: `Max CE Gamma (nearest to ATM)` }
-                : { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
-              const ceThetaCell = { bgClass: isR1Row ? ceRowHighlightBg : ceDefaultBg };
-              const ceVolCell = getCellBg(ceVolVal, columnStats.ce.volume, ceDefaultBg, isR1Row, ceRowHighlightBg);
-              const ceLtpCell = getCellBg(ceLtpVal, columnStats.ce.ltp, ceDefaultBg, isR1Row, ceRowHighlightBg);
-              const ceChgCell = getCellBg(ceChgOiVal, columnStats.ce.chg_oi, ceDefaultBg, isR1Row, ceRowHighlightBg);
+                : { bgClass: isCeHighlighted ? ceRowHighlightBg : ceDefaultBg };
+              const ceThetaCell = { bgClass: isCeHighlighted ? ceRowHighlightBg : ceDefaultBg };
+              const ceVolCell = getCellBg(ceVolVal, columnStats.ce.volume, ceDefaultBg, isCeHighlighted, ceRowHighlightBg);
+              const ceLtpCell = getCellBg(ceLtpVal, columnStats.ce.ltp, ceDefaultBg, isCeHighlighted, ceRowHighlightBg);
+              const ceChgCell = getCellBg(ceChgOiVal, columnStats.ce.chg_oi, ceDefaultBg, isCeHighlighted, ceRowHighlightBg);
 
-              // ─── Border Classes for S1 (Support - Blue) and R1/CE (Resistance - Orange) ─────────
+              // ─── Border Classes for S1/S2 (Support - Blue/Cyan) and R1/R2 (Resistance - Orange/Amber) ─────────
               const s1BlinkClass = isSupportBlinking ? 'blink-support' : '';
               const r1BlinkClass = isResistanceBlinking ? 'blink-resistance' : '';
 
-              // PE side border classes (Support S1: Blue border)
-              const peBorderTopBottom = isS1Row ? `border-t-[3px] border-b-[3px] border-blue-500 ${s1BlinkClass}` : '';
-              const peLeftmostBorder = isS1Row ? `border-t-[3px] border-b-[3px] border-l-[3px] border-blue-500 ${s1BlinkClass}` : '';
+              // PE side border classes
+              const peBorderTopBottom = isS1Row
+                ? `border-t-[3px] border-b-[3px] border-blue-500 ${s1BlinkClass}`
+                : isS2Row
+                ? 'border-t-2 border-b-2 border-cyan-500/60'
+                : '';
+              const peLeftmostBorder = isS1Row
+                ? `border-t-[3px] border-b-[3px] border-l-[3px] border-blue-500 ${s1BlinkClass}`
+                : isS2Row
+                ? 'border-t-2 border-b-2 border-l-2 border-cyan-500/60'
+                : '';
 
-              // CE side border classes (Resistance R1/CE: Orange border)
-              const ceBorderTopBottom = isR1Row ? `border-t-[3px] border-b-[3px] border-orange-500 ${r1BlinkClass}` : '';
-              const ceRightmostBorder = isR1Row ? `border-t-[3px] border-b-[3px] border-r-[3px] border-orange-500 ${r1BlinkClass}` : '';
+              // CE side border classes
+              const ceBorderTopBottom = isR1Row
+                ? `border-t-[3px] border-b-[3px] border-orange-500 ${r1BlinkClass}`
+                : isR2Row
+                ? 'border-t-2 border-b-2 border-amber-500/60'
+                : '';
+              const ceRightmostBorder = isR1Row
+                ? `border-t-[3px] border-b-[3px] border-r-[3px] border-orange-500 ${r1BlinkClass}`
+                : isR2Row
+                ? 'border-t-2 border-b-2 border-r-2 border-amber-500/60'
+                : '';
 
               // Strike cell border classes
               let strikeBorderClass = '';
               if (isS1Row && isR1Row) {
-                // Both S1 and R1 meet on this strike
                 strikeBorderClass = `border-t-[3px] border-b-[3px] border-l-[3px] border-blue-500 border-r-[3px] border-orange-500 ${s1BlinkClass} ${r1BlinkClass}`;
               } else if (isS1Row) {
-                // Support S1: finishes at right border of strike cell with Blue border
                 strikeBorderClass = `border-t-[3px] border-b-[3px] border-r-[3px] border-blue-500 ${s1BlinkClass}`;
               } else if (isR1Row) {
-                // Resistance R1: starts at left border of strike cell with Orange border
                 strikeBorderClass = `border-t-[3px] border-b-[3px] border-l-[3px] border-orange-500 ${r1BlinkClass}`;
+              } else if (isS2Row && isR2Row) {
+                strikeBorderClass = 'border-t-2 border-b-2 border-l-2 border-cyan-500/60 border-r-2 border-amber-500/60';
+              } else if (isS2Row) {
+                strikeBorderClass = 'border-t-2 border-b-2 border-r-2 border-cyan-500/60';
+              } else if (isR2Row) {
+                strikeBorderClass = 'border-t-2 border-b-2 border-l-2 border-amber-500/60';
               }
 
               // Strike cell background
@@ -657,8 +733,12 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                 ? 'bg-yellow-500/25 text-yellow-300 font-extrabold border-y-2 border-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.25)]'
                 : isR1Row
                 ? 'bg-orange-950/60 text-yellow-300 font-bold'
+                : isR2Row
+                ? 'bg-amber-950/50 text-yellow-300 font-bold'
                 : isS1Row
                 ? 'bg-blue-950/60 text-yellow-300 font-bold'
+                : isS2Row
+                ? 'bg-cyan-950/50 text-yellow-300 font-bold'
                 : 'bg-gray-900 text-yellow-300/90 font-bold';
 
               // Click handler helpers
@@ -752,6 +832,16 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                         </span>
                       )}
 
+                      {/* R2 Badge (Amber) */}
+                      {isR2Row && (
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded font-extrabold uppercase flex items-center gap-1 bg-amber-950 text-amber-300 border border-amber-600"
+                          title="R2 Resistance"
+                        >
+                          <span>R2</span>
+                        </span>
+                      )}
+
                       {/* S1 Badge (Blue) */}
                       {isS1Row && (
                         <span
@@ -769,6 +859,16 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                         </span>
                       )}
 
+                      {/* S2 Badge (Cyan) */}
+                      {isS2Row && (
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded font-extrabold uppercase flex items-center gap-1 bg-cyan-950 text-cyan-300 border border-cyan-600"
+                          title="S2 Support"
+                        >
+                          <span>S2</span>
+                        </span>
+                      )}
+
                       {/* ATM Badge */}
                       {isAtm && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-black uppercase bg-yellow-400 text-gray-950 shadow-sm">
@@ -776,8 +876,8 @@ export const OptionStrikeSignalTable: React.FC<OptionStrikeSignalTableProps> = (
                         </span>
                       )}
 
-                      {/* ITM Badges if not R1/S1/ATM */}
-                      {!isAtm && !isR1Row && !isS1Row && (
+                      {/* ITM Badges if not R1/R2/S1/S2/ATM */}
+                      {!isAtm && !isR1Row && !isR2Row && !isS1Row && !isS2Row && (
                         isPeItm ? (
                           <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold text-orange-400/90 bg-orange-950/40 border border-orange-800/40">
                             PE-ITM
