@@ -42,6 +42,8 @@ export interface EngineStatus {
   spot_price: number;
   ema_5m: number | null;
   ema_5m_slope: number | null;
+  ema_2m?: number | null;
+  ema_2m_slope?: number | null;
   ema_1m: number | null;
   ema_1m_slope: number | null;
   spread: number;
@@ -233,6 +235,7 @@ export interface EmaCandlesResponse {
   timeframe: string;
   candles: EmaCandle[];
   candles_5m?: EmaCandle[];
+  candles_2m?: EmaCandle[];
   candles_1m?: EmaCandle[];
   diagnostics?: any;
   ema_status: {
@@ -243,6 +246,13 @@ export interface EmaCandlesResponse {
     direction_5m: string;
     ema_5m_candles_count?: number;
     ema_5m_slope?: number;
+    ema_2m?: number | null;
+    ema_2m_ready?: boolean;
+    ema_2m_valid?: boolean;
+    status_2m?: string;
+    direction_2m?: string;
+    ema_2m_candles_count?: number;
+    ema_2m_slope?: number;
     ema_1m: number | null;
     ema_1m_ready: boolean;
     ema_1m_candles_count?: number;

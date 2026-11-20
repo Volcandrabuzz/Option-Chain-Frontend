@@ -83,6 +83,7 @@ export const PaperTradingPage: React.FC = () => {
   const [signalAudits, setSignalAudits] = useState<SignalAuditRecord[]>([]);
   const [emaCandles, setEmaCandles] = useState<EmaCandle[]>([]);
   const [candles5m, setCandles5m] = useState<EmaCandle[]>([]);
+  const [candles2m, setCandles2m] = useState<EmaCandle[]>([]);
   const [candles1m, setCandles1m] = useState<EmaCandle[]>([]);
   const [emaStatusData, setEmaStatusData] = useState<any>(null);
   const [auditTab, setAuditTab] = useState<'trades' | 'signals'>('trades');
@@ -148,6 +149,7 @@ export const PaperTradingPage: React.FC = () => {
       if (resCandles.status === 'fulfilled' && resCandles.value.success) {
         setEmaCandles(resCandles.value.candles || []);
         setCandles5m(resCandles.value.candles_5m || []);
+        setCandles2m(resCandles.value.candles_2m || []);
         setCandles1m(resCandles.value.candles_1m || []);
         setEmaStatusData(resCandles.value.ema_status || null);
       }
@@ -627,6 +629,26 @@ export const PaperTradingPage: React.FC = () => {
                 detail: status?.spot_price && status?.ema_5m ? (status.spot_price >= status.ema_5m ? 'Above' : 'Below') : '—'
               },
               {
+                id: 'ema_2m_ready',
+                label: '2m EMA Ready',
+                passed: (status as any)?.latest_decision?.gates?.gate_ema_2m_ready ?? (status?.ema_2m !== null && status?.ema_2m !== undefined),
+                detail: status?.ema_2m ? 'READY' : 'Warmup (<9)'
+              },
+              {
+                id: 'ema_2m_direction',
+                label: '2m EMA Slope',
+                passed: (status as any)?.latest_decision?.gates?.gate_ema_2m_direction ?? ((status?.ema_2m_slope || 0) !== 0),
+                detail: status?.ema_2m_slope ? `${status.ema_2m_slope > 0 ? '+' : ''}${status.ema_2m_slope}` : 'Flat'
+              },
+              {
+                id: 'ema_2m_alignment',
+                label: '2m Spot Align',
+                passed: (status as any)?.latest_decision?.gates?.gate_ema_2m_alignment ?? (
+                  status?.spot_price && status?.ema_2m ? (status.spot_price >= status.ema_2m) : false
+                ),
+                detail: status?.spot_price && status?.ema_2m ? (status.spot_price >= status.ema_2m ? 'Above' : 'Below') : '—'
+              },
+              {
                 id: 'ema_1m_ready',
                 label: '1m EMA Ready',
                 passed: (status as any)?.latest_decision?.gates?.gate_ema_1m_ready ?? (status?.ema_1m !== null && status?.ema_1m !== undefined),
@@ -801,6 +823,15 @@ export const PaperTradingPage: React.FC = () => {
                 5m State: {emaStatusData?.status_5m || (status?.ema_5m ? 'READY' : 'WARMING_UP')}
               </span>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                (emaStatusData?.status_2m || (status?.ema_2m ? 'READY' : 'WARMING_UP')) === 'READY'
+                  ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                  : (emaStatusData?.status_2m || 'WARMING_UP') === 'STALE'
+                  ? 'bg-rose-950 text-rose-400 border-rose-800'
+                  : 'bg-amber-950 text-amber-400 border-amber-800'
+              }`}>
+                2m State: {emaStatusData?.status_2m || (status?.ema_2m ? 'READY' : 'WARMING_UP')}
+              </span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
                 (emaStatusData?.status_1m || (status?.ema_1m ? 'READY' : 'WARMING_UP')) === 'READY'
                   ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
                   : (emaStatusData?.status_1m || 'WARMING_UP') === 'STALE'
@@ -815,7 +846,7 @@ export const PaperTradingPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
               <span className="text-[11px] text-slate-400 block font-semibold">Current 9 EMA</span>
               <span className="text-base font-black text-white">
@@ -830,6 +861,14 @@ export const PaperTradingPage: React.FC = () => {
                 {(status?.ema_5m_slope || 0) >= 0 ? '+' : ''}{status?.ema_5m_slope ?? 0.0}
               </span>
               <span className="text-[10px] text-slate-500 block">Current - Previous EMA</span>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <span className="text-[11px] text-slate-400 block font-semibold">2m Mid EMA</span>
+              <span className="text-base font-black text-purple-400">
+                ₹{status?.ema_2m ? status.ema_2m.toLocaleString() : 'Warmup'}
+              </span>
+              <span className="text-[10px] text-slate-500 block">Slope: {status?.ema_2m_slope ?? 0.0}</span>
             </div>
 
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
@@ -863,18 +902,21 @@ export const PaperTradingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Chart.js 1m & 5m EMA Candlestick Overlay Chart */}
+          {/* Chart.js 1m, 2m & 5m EMA Candlestick Overlay Chart */}
           <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-slate-300">
-                  {selectedIndex} Dual EMA Stream Visualizer (5m Interval Base)
+                  {selectedIndex} Multi-EMA Stream Visualizer (5m Interval Base)
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span> Underlying Close
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-cyan-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span> 5m EMA(9)
+                </span>
+                <span className="flex items-center gap-1.5 text-[11px] text-purple-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block"></span> 2m EMA(9)
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-amber-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> 1m EMA(9)
@@ -913,6 +955,23 @@ export const PaperTradingPage: React.FC = () => {
                         borderColor: '#06b6d4',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                        spanGaps: true,
+                      },
+                      {
+                        label: '2m EMA(9)',
+                        data: emaCandles.map((c) => {
+                          const cTime = new Date(c.time || c.timestamp).getTime();
+                          const matching2m = candles2m
+                            .filter((c2) => new Date(c2.time || c2.timestamp).getTime() <= cTime && c2.ema_9 !== null)
+                            .slice(-1)[0];
+                          return matching2m ? matching2m.ema_9 : null;
+                        }),
+                        borderColor: '#a855f7',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1.5,
+                        borderDash: [3, 3],
                         pointRadius: 0,
                         tension: 0.2,
                         spanGaps: true,
